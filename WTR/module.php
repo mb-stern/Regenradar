@@ -192,153 +192,412 @@ class Wetterradar extends IPSModuleStrict
         );
 
         return <<<HTML
-    <div id="wetterradar-root" style="width:100%;height:100%;font-family:system-ui,sans-serif;">
-        <div id="map" style="width:100%;height:100%;"></div>
-
-        <div id="wr-current" style="position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:1000;background:rgba(40,40,40,.85);color:white;padding:8px;border-radius:10px;">
-            <span id="wr-temp">–</span>
-            <span id="wr-humidity">–</span>
-            <span id="wr-wind">–</span>
-            <span id="wr-rain">–</span>
-            <span id="wr-clouds">–</span>
-        </div>
-
-        <div id="wr-status" style="position:absolute;bottom:10px;left:10px;z-index:1000;background:rgba(40,40,40,.85);color:white;padding:8px;border-radius:10px;">
-            Initialisierung...
-        </div>
-    </div>
-
-    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<div id="wetterradar-root" class="wr-root">
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css">
 
-    <script>
-    const WR_INITIAL = {$initialJson};
+    <style>
+        .wr-root {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: system-ui, Segoe UI, Roboto, sans-serif;
+            --wr-bg: rgba(40,40,40,0.85);
+            --wr-text: #fff;
+            --wr-border: #444;
+            --wr-shadow: 0 4px 14px rgba(0,0,0,.25);
+            --wr-radius: 10px;
+            --wr-pad: 8px;
+            --wr-gap: 8px;
+            --wr-fs: 12px;
+            --wr-fs-small: 11px;
+            --wr-fs-tiny: 10px;
+        }
+        .wr-root.wr-light {
+            --wr-bg: rgba(255,255,255,0.90);
+            --wr-text: #222;
+            --wr-border: #ccc;
+        }
+        .wr-root #map {
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+        }
+        .wr-panel {
+            position: absolute;
+            z-index: 1000;
+            background: var(--wr-bg);
+            color: var(--wr-text);
+            border-radius: var(--wr-radius);
+            padding: var(--wr-pad);
+            box-shadow: var(--wr-shadow);
+            backdrop-filter: blur(4px);
+            font-size: var(--wr-fs);
+        }
+        #wr-current {
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 14px;
+            align-items: center;
+            white-space: nowrap;
+        }
+        #wr-current .wr-value {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        #wr-current img {
+            width: 20px;
+            height: 20px;
+        }
+        #wr-station-title {
+            font-weight: 700;
+            opacity: .95;
+        }
+        #wr-legend {
+            bottom: 10px;
+            left: 10px;
+            font-size: var(--wr-fs-tiny);
+        }
+        #wr-legend .wr-legend-entry {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            margin-bottom: 4px;
+        }
+        #wr-legend .wr-legend-color {
+            width: 18px;
+            height: 12px;
+            border: 1px solid var(--wr-border);
+        }
+        #wr-forecast {
+            bottom: 10px;
+            right: 10px;
+            display: flex;
+            gap: var(--wr-gap);
+            padding: 6px 8px;
+        }
+        .wr-forecast-entry {
+            text-align: center;
+            min-width: 42px;
+            cursor: default;
+        }
+        .wr-forecast-entry img {
+            width: 40px;
+            height: 40px;
+        }
+        .wr-forecast-entry .wr-day {
+            font-weight: 600;
+            margin-bottom: 2px;
+            font-size: var(--wr-fs);
+        }
+        .wr-forecast-entry .wr-temp {
+            font-size: var(--wr-fs-small);
+            opacity: .9;
+        }
+        #wr-status {
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            max-width: 45%;
+            text-align: center;
+        }
+        .wr-tooltip {
+            position: fixed;
+            background: var(--wr-bg);
+            color: var(--wr-text);
+            font-size: var(--wr-fs-small);
+            padding: 6px 8px;
+            border-radius: var(--wr-radius);
+            box-shadow: 0 8px 18px rgba(0,0,0,.28);
+            white-space: normal;
+            line-height: 1.25;
+            max-width: 220px;
+            z-index: 2000;
+            pointer-events: none;
+        }
+        @media (max-width: 700px) {
+            #wr-current {
+                top: 8px;
+                left: auto;
+                right: 8px;
+                transform: none;
+                max-width: calc(100% - 72px);
+                flex-wrap: wrap;
+                justify-content: flex-end;
+                gap: 6px;
+                text-align: right;
+            }
+            #wr-forecast {
+                left: 8px;
+                right: 8px;
+                bottom: 8px;
+                justify-content: flex-end;
+                overflow-x: auto;
+            }
+            #wr-legend {
+                display: none;
+            }
+            #wr-status {
+                left: 8px;
+                bottom: 72px;
+                transform: none;
+                max-width: calc(100% - 16px);
+            }
+        }
+    </style>
 
-    let wrMap = null;
-    let wrBaseLayer = null;
-    let wrRadarLayer = null;
-    let wrData = WR_INITIAL;
+    <div id="map"></div>
 
-    function wrSetText(id, value) {
-        const el = document.getElementById(id);
-        if (el) el.textContent = value || '–';
+    <div id="wr-current" class="wr-panel">
+        <div id="wr-station-title">Wetterstation</div>
+        <div class="wr-value"><img src="https://raw.githubusercontent.com/basmilius/weather-icons/dev/production/fill/svg/thermometer.svg" alt=""><span id="wr-temp">–</span></div>
+        <div class="wr-value"><img src="https://raw.githubusercontent.com/basmilius/weather-icons/dev/production/fill/svg/humidity.svg" alt=""><span id="wr-humidity">–</span></div>
+        <div class="wr-value"><img src="https://raw.githubusercontent.com/basmilius/weather-icons/dev/production/fill/svg/wind.svg" alt=""><span id="wr-wind">–</span></div>
+        <div class="wr-value"><img src="https://raw.githubusercontent.com/basmilius/weather-icons/dev/production/fill/svg/rain.svg" alt=""><span id="wr-rain">–</span></div>
+        <div class="wr-value"><img src="https://raw.githubusercontent.com/basmilius/weather-icons/dev/production/fill/svg/cloudy.svg" alt=""><span id="wr-clouds">–</span></div>
+    </div>
+
+    <div id="wr-legend" class="wr-panel">
+        <div class="wr-legend-entry"><div class="wr-legend-color" style="background:#b3d9ff;"></div> Sehr leicht</div>
+        <div class="wr-legend-entry"><div class="wr-legend-color" style="background:#3399ff;"></div> Leicht</div>
+        <div class="wr-legend-entry"><div class="wr-legend-color" style="background:#0066ff;"></div> Mäßig</div>
+        <div class="wr-legend-entry"><div class="wr-legend-color" style="background:#cc3300;"></div> Stark</div>
+        <div class="wr-legend-entry"><div class="wr-legend-color" style="background:#990099;"></div> Extrem</div>
+    </div>
+
+    <div id="wr-forecast" class="wr-panel"></div>
+    <div id="wr-status" class="wr-panel">Initialisierung...</div>
+</div>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+<script>
+const WR_INITIAL = {$initialJson};
+const WR_ICON_URL = "https://raw.githubusercontent.com/basmilius/weather-icons/dev/production/fill/svg/";
+const WR_ICON_MAP = {
+    "01d":"clear-day","01n":"clear-night",
+    "02d":"partly-cloudy-day","02n":"partly-cloudy-night",
+    "03d":"cloudy","03n":"cloudy",
+    "04d":"overcast","04n":"overcast",
+    "09d":"rain","09n":"rain","10d":"rain","10n":"rain",
+    "11d":"thunderstorms-day","11n":"thunderstorms-night",
+    "13d":"snow","13n":"snow",
+    "50d":"fog","50n":"fog"
+};
+
+let wrMap = null;
+let wrBaseLayer = null;
+let wrRadarLayer = null;
+let wrData = WR_INITIAL;
+
+function wrSetText(id, value) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = value || '–';
+}
+
+function wrNumber(value, digits) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return 0;
+    return Number(n.toFixed(digits || 0));
+}
+
+function wrRemoveTooltip() {
+    const t = document.querySelector('.wr-tooltip');
+    if (t) t.remove();
+}
+
+function wrShowForecastTooltip(entry, f) {
+    wrRemoveTooltip();
+
+    const t = document.createElement('div');
+    t.className = 'wr-tooltip';
+    t.innerHTML =
+        "<b style='display:block; margin-bottom:4px;'>" + (f.description || 'Vorhersage') + "</b>" +
+        "<div>💧 " + wrNumber(f.humidity, 0) + " %</div>" +
+        "<div>🌡️ " + Math.round(Number(f.max || 0)) + "° / " + Math.round(Number(f.min || 0)) + "°</div>" +
+        "<div>💨 " + Math.round(Number(f.wind || 0)) + " km/h</div>" +
+        (Number(f.rain || 0) > 0 ? "<div>🌧️ " + Number(f.rain).toFixed(1) + " mm</div>" : "") +
+        (Number(f.snow || 0) > 0 ? "<div>❄️ " + Number(f.snow).toFixed(1) + " mm</div>" : "") +
+        "<div>☁️ " + Math.round(Number(f.clouds || 0)) + " %</div>";
+
+    document.body.appendChild(t);
+
+    const rect = entry.getBoundingClientRect();
+    const margin = 8;
+    const tRect = t.getBoundingClientRect();
+
+    let left = rect.left + rect.width / 2 - tRect.width / 2;
+    if (left < margin) left = margin;
+
+    const maxLeft = window.innerWidth - margin - tRect.width;
+    if (left > maxLeft) left = maxLeft;
+
+    t.style.left = left + "px";
+    t.style.top = (rect.top - 8) + "px";
+    t.style.transform = "translate(0, -100%)";
+}
+
+function wrRenderForecast(forecast) {
+    const box = document.getElementById('wr-forecast');
+    if (!box) return;
+
+    box.innerHTML = '';
+
+    if (!Array.isArray(forecast) || forecast.length === 0) {
+        box.style.display = 'none';
+        return;
     }
 
-    function wrRenderWeather(payload) {
-        if (!payload || !payload.current) return;
+    box.style.display = 'flex';
 
-        wrSetText('wr-temp', payload.current.temperature);
-        wrSetText('wr-humidity', payload.current.humidity);
-        wrSetText('wr-wind', payload.current.wind);
-        wrSetText('wr-rain', payload.current.rain);
-        wrSetText('wr-clouds', payload.current.clouds);
+    forecast.forEach(function(f) {
+        if (!f || !f.dt) return;
+
+        const d = new Date(Number(f.dt) * 1000);
+        const day = d.toLocaleDateString('de-CH', { weekday: 'short' });
+        const mappedIcon = WR_ICON_MAP[f.icon] || 'not-available';
+        const icon = WR_ICON_URL + mappedIcon + '.svg';
+
+        const entry = document.createElement('div');
+        entry.className = 'wr-forecast-entry';
+        entry.innerHTML =
+            "<div class='wr-day'>" + day + "</div>" +
+            "<img alt='' src='" + icon + "'>" +
+            "<div class='wr-temp'>" + Math.round(Number(f.max || 0)) + "°/" + Math.round(Number(f.min || 0)) + "°</div>";
+
+        entry.addEventListener('mouseenter', function() {
+            wrShowForecastTooltip(entry, f);
+        });
+        entry.addEventListener('mouseleave', wrRemoveTooltip);
+
+        box.appendChild(entry);
+    });
+}
+
+function wrRenderWeather(payload) {
+    if (!payload || !payload.current) return;
+
+    wrSetText('wr-temp', payload.current.temperature);
+    wrSetText('wr-humidity', payload.current.humidity);
+    wrSetText('wr-wind', payload.current.wind);
+    wrSetText('wr-rain', payload.current.rain);
+    wrSetText('wr-clouds', payload.current.clouds);
+    wrRenderForecast(payload.forecast || []);
+}
+
+function wrInitMap(config) {
+    if (!config || wrMap) return;
+
+    const root = document.getElementById('wetterradar-root');
+    if (root && config.theme === 'light') {
+        root.classList.add('wr-light');
     }
 
-    function wrInitMap(config) {
-        if (!config || wrMap) return;
+    wrMap = L.map('map', {
+        zoomControl: true,
+        attributionControl: true,
+        maxZoom: config.radarMaxZoom || 7
+    }).setView([config.lat, config.lon], config.zoom || 7);
 
-        wrMap = L.map('map', {
-            zoomControl: true,
-            attributionControl: true,
-            maxZoom: config.radarMaxZoom || 7
-        }).setView([config.lat, config.lon], config.zoom || 7);
+    const options = {
+        maxZoom: config.radarMaxZoom || 7,
+        attribution: config.mapAttribution || ''
+    };
 
-        const options = {
-            maxZoom: config.radarMaxZoom || 7,
-            attribution: config.mapAttribution || ''
-        };
-
-        if (Array.isArray(config.mapSubdomains) && config.mapSubdomains.length > 0) {
-            options.subdomains = config.mapSubdomains;
-        }
-
-        wrBaseLayer = L.tileLayer(config.mapTileUrl, options).addTo(wrMap);
-        L.marker([config.lat, config.lon]).addTo(wrMap).bindPopup('Standort');
+    if (Array.isArray(config.mapSubdomains) && config.mapSubdomains.length > 0) {
+        options.subdomains = config.mapSubdomains;
     }
 
-    function wrRenderRadar(payload) {
-        if (!payload || !wrMap) return;
+    wrBaseLayer = L.tileLayer(config.mapTileUrl, options).addTo(wrMap);
+    L.marker([config.lat, config.lon]).addTo(wrMap).bindPopup('Standort');
+}
 
-        if (wrRadarLayer) {
-            try { wrMap.removeLayer(wrRadarLayer); } catch(e) {}
-            wrRadarLayer = null;
-        }
+function wrRenderRadar(payload) {
+    if (!payload || !wrMap) return;
 
-        if (payload.provider === 'rainviewer' && payload.frames && payload.frames.length > 0) {
-            const frame = payload.frames[payload.frames.length - 1];
-            const host = payload.host || '';
-            const tileSize = window.devicePixelRatio >= 2 ? 512 : 256;
-
-            wrRadarLayer = L.tileLayer(
-                host + frame.path + '/' + tileSize + '/{z}/{x}/{y}/2/1_1.png',
-                {
-                    tileSize: 256,
-                    opacity: 0.5,
-                    maxNativeZoom: 7,
-                    maxZoom: 7
-                }
-            ).addTo(wrMap);
-
-            wrSetText('wr-status', 'Rainviewer: ' + new Date(frame.time * 1000).toLocaleTimeString());
-            return;
-        }
-
-        if (payload.provider === 'rainbow' && payload.frames && payload.frames.length > 0) {
-            const frame = payload.frames[Math.floor(payload.frames.length / 2)];
-
-            wrRadarLayer = L.tileLayer(
-                frame.url,
-                {
-                    tileSize: 256,
-                    opacity: 0.5,
-                    maxNativeZoom: 12,
-                    maxZoom: 12
-                }
-            ).addTo(wrMap);
-
-            wrSetText('wr-status', 'Rainbow: ' + new Date(frame.time * 1000).toLocaleTimeString());
-            return;
-        }
-
-        wrSetText('wr-status', payload.error || 'Keine Radardaten');
+    if (wrRadarLayer) {
+        try { wrMap.removeLayer(wrRadarLayer); } catch(e) {}
+        wrRadarLayer = null;
     }
 
-    function wrHandlePayload(payload) {
-        if (!payload || !payload.type) return;
+    if (payload.provider === 'rainviewer' && payload.frames && payload.frames.length > 0) {
+        const frame = payload.frames[payload.frames.length - 1];
+        const host = payload.host || '';
+        const tileSize = window.devicePixelRatio >= 2 ? 512 : 256;
 
-        if (payload.type === 'init') {
-            wrInitMap(payload.data.config);
-            wrRenderWeather(payload.data.weather);
-            wrRenderRadar(payload.data.radar);
-            return;
-        }
+        wrRadarLayer = L.tileLayer(
+            host + frame.path + '/' + tileSize + '/{z}/{x}/{y}/2/1_1.png',
+            {
+                tileSize: 256,
+                opacity: 0.5,
+                maxNativeZoom: 7,
+                maxZoom: 7
+            }
+        ).addTo(wrMap);
 
-        if (payload.type === 'weather') {
-            wrRenderWeather(payload.data);
-            return;
-        }
-
-        if (payload.type === 'radar') {
-            wrRenderRadar(payload.data);
-            return;
-        }
+        wrSetText('wr-status', 'Rainviewer: ' + new Date(frame.time * 1000).toLocaleTimeString());
+        return;
     }
 
-    function handleMessage(message) {
-        try {
-            const payload = JSON.parse(message);
-            wrHandlePayload(payload);
-        } catch (e) {
-            wrSetText('wr-status', 'Fehler: ' + e.message);
-        }
+    if (payload.provider === 'rainbow' && payload.frames && payload.frames.length > 0) {
+        const frame = payload.frames[Math.floor(payload.frames.length / 2)];
+
+        wrRadarLayer = L.tileLayer(
+            frame.url,
+            {
+                tileSize: 256,
+                opacity: 0.5,
+                maxNativeZoom: 12,
+                maxZoom: 12
+            }
+        ).addTo(wrMap);
+
+        wrSetText('wr-status', 'Rainbow: ' + new Date(frame.time * 1000).toLocaleTimeString());
+        return;
     }
 
-    wrHandlePayload(WR_INITIAL);
-    setTimeout(function() {
-        if (wrMap) wrMap.invalidateSize();
-    }, 250);
-    </script>
-    HTML;
+    wrSetText('wr-status', payload.error || 'Keine Radardaten');
+}
+
+function wrHandlePayload(payload) {
+    if (!payload || !payload.type) return;
+
+    if (payload.type === 'init') {
+        wrInitMap(payload.data.config);
+        wrRenderWeather(payload.data.weather);
+        wrRenderRadar(payload.data.radar);
+        return;
+    }
+
+    if (payload.type === 'weather') {
+        wrRenderWeather(payload.data);
+        return;
+    }
+
+    if (payload.type === 'radar') {
+        wrRenderRadar(payload.data);
+        return;
+    }
+}
+
+function handleMessage(message) {
+    try {
+        const payload = JSON.parse(message);
+        wrHandlePayload(payload);
+    } catch (e) {
+        wrSetText('wr-status', 'Fehler: ' + e.message);
+    }
+}
+
+wrHandlePayload(WR_INITIAL);
+setTimeout(function() {
+    if (wrMap) wrMap.invalidateSize();
+}, 250);
+</script>
+HTML;
     }
 
     public function UpdateWeather(): void
