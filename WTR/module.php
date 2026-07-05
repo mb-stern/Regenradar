@@ -509,7 +509,7 @@ class Wetterradar extends IPSModuleStrict
         /* Nur ganz am Schluss / sehr kleine Handybreite: Vorhersage rechts moderat kompakter. */
         @media (max-width: 430px) {
             #wr-forecast {
-                max-width: min(182px, calc(100% - 120px));
+                max-width: min(194px, calc(100% - 120px));
                 padding: 4px 5px;
                 gap: 3px;
             }
