@@ -2,6 +2,7 @@
 
 class Wetterradar extends IPSModuleStrict
 {
+    // DESIGN-FIX 2026-07-05: Tooltip und Forecast-CSS real angepasst (nicht identische Datei).
     // Patch 2026-07-05: Steuerpanel mit Zurück / Play-Pause / Vor / Zeit-Slider wie im Script integriert.
     public function Create(): void
     {
@@ -234,6 +235,12 @@ class Wetterradar extends IPSModuleStrict
             --wr-controls-w: calc(220px * var(--k));
             --wr-range-h: calc(22px * var(--k));
             --wr-btn-pad-v: calc(8px * var(--k));
+            /* Script-kompatible Aliase für Tooltip-CSS */
+            --bg: var(--wr-bg);
+            --text: var(--wr-text);
+            --pad: var(--wr-pad);
+            --radius: var(--wr-radius);
+            --fs-small: var(--wr-fs-small);
         }
         .wr-root.wr-light {
             --wr-bg: rgba(255,255,255,0.90);
@@ -383,13 +390,14 @@ class Wetterradar extends IPSModuleStrict
         #wr-status {
             display: none;
         }
-        .wr-tooltip {
+        /* Tooltip 1:1 wie im Script: gleiche Variablen, gleiche Abstände, gleicher Schatten. */
+        .tooltip {
             position: fixed;
-            background: var(--wr-bg);
-            color: var(--wr-text);
-            font-size: var(--wr-fs-small);
-            padding: calc(var(--wr-pad) - 2px) var(--wr-pad);
-            border-radius: var(--wr-radius);
+            background: var(--bg);
+            color: var(--text);
+            font-size: var(--fs-small);
+            padding: calc(var(--pad) - 2px) var(--pad);
+            border-radius: var(--radius);
             box-shadow: 0 calc(8px * var(--k)) calc(18px * var(--k)) rgba(0,0,0,.28);
             white-space: normal;
             line-height: 1.25;
@@ -498,6 +506,28 @@ class Wetterradar extends IPSModuleStrict
             }
         }
 
+        /* Nur ganz am Schluss / sehr kleine Handybreite: Vorhersage rechts nochmals kompakter. */
+        @media (max-width: 430px) {
+            #wr-forecast {
+                max-width: min(132px, calc(100% - 106px));
+                padding: 2px 3px;
+                gap: 1px;
+            }
+            .wr-forecast-entry {
+                flex: 0 0 20px;
+                min-width: 20px;
+            }
+            .wr-forecast-entry img {
+                width: 16px;
+                height: 16px;
+            }
+            .wr-forecast-entry .wr-day,
+            .wr-forecast-entry .wr-temp {
+                font-size: 6px;
+                line-height: 1.05;
+            }
+        }
+
     </style>
 
     <div id="map"></div>
@@ -592,7 +622,8 @@ function wrNumber(value, digits) {
 }
 
 function wrRemoveTooltip() {
-    const t = document.querySelector('.wr-tooltip');
+    const root = document.getElementById('wetterradar-root');
+    const t = (root || document).querySelector('.tooltip');
     if (t) t.remove();
 }
 
@@ -600,7 +631,7 @@ function wrShowForecastTooltip(entry, f) {
     wrRemoveTooltip();
 
     const t = document.createElement('div');
-    t.className = 'wr-tooltip';
+    t.className = 'tooltip';
     t.innerHTML =
         "<b style='display:block; margin-bottom:4px;'>" + (f.description || 'Vorhersage') + "</b>" +
         "<div>💧 " + wrNumber(f.humidity, 0) + " %</div>" +
@@ -610,7 +641,9 @@ function wrShowForecastTooltip(entry, f) {
         (Number(f.snow || 0) > 0 ? "<div>❄️ " + Number(f.snow).toFixed(1) + " mm</div>" : "") +
         "<div>☁️ " + Math.round(Number(f.clouds || 0)) + " %</div>";
 
-    document.body.appendChild(t);
+    // Im Modul in den Root hängen, damit die Script-Variablen (--bg/--text) wirklich greifen.
+    const root = document.getElementById('wetterradar-root');
+    (root || document.body).appendChild(t);
 
     const rect = entry.getBoundingClientRect();
     const margin = 8;
