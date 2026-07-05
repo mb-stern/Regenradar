@@ -214,7 +214,11 @@ class Wetterradar extends IPSModuleStrict
             font-family: system-ui, Segoe UI, Roboto, sans-serif;
             --wr-bg: rgba(40,40,40,0.85);
             --wr-text: #fff;
+            --wr-panel: #2b2b2b;
             --wr-border: #444;
+            --wr-btn-bg: #333;
+            --wr-btn-fg: #fff;
+            --wr-btn-border: #999;
             --k: 1;
             --wr-fs: calc(12px * var(--k));
             --wr-fs-small: calc(11px * var(--k));
@@ -234,7 +238,11 @@ class Wetterradar extends IPSModuleStrict
         .wr-root.wr-light {
             --wr-bg: rgba(255,255,255,0.90);
             --wr-text: #222;
+            --wr-panel: #fff;
             --wr-border: #ccc;
+            --wr-btn-bg: #fff;
+            --wr-btn-fg: #000;
+            --wr-btn-border: #ddd;
         }
         .wr-root #map {
             width: 100%;
@@ -272,7 +280,7 @@ class Wetterradar extends IPSModuleStrict
             height: var(--wr-icon);
         }
         #wr-legend {
-            bottom: 22px;
+            bottom: 10px;
             left: 10px;
             font-size: var(--wr-fs-tiny);
         }
@@ -288,11 +296,12 @@ class Wetterradar extends IPSModuleStrict
             border: 1px solid var(--wr-border);
         }
         #wr-forecast {
-            bottom: 22px;
+            bottom: 10px;
             right: 10px;
             display: flex;
             gap: var(--wr-gap);
             padding: calc(var(--wr-pad) - 2px) var(--wr-pad);
+            border-radius: var(--wr-radius);
         }
         #wr-controls {
             top: 10px;
@@ -316,9 +325,9 @@ class Wetterradar extends IPSModuleStrict
             gap: 6px;
             min-width: 0;
             border-radius: calc(var(--wr-radius) - 2px);
-            background: rgba(255,255,255,.08);
-            color: var(--wr-text);
-            border: 1px solid rgba(255,255,255,.35);
+            background: var(--wr-btn-bg);
+            color: var(--wr-btn-fg);
+            border: 1px solid var(--wr-btn-border);
             -webkit-appearance: none;
             appearance: none;
             background-image: none;
@@ -356,7 +365,6 @@ class Wetterradar extends IPSModuleStrict
         }
         .wr-forecast-entry {
             text-align: center;
-            min-width: 42px;
             cursor: default;
         }
         .wr-forecast-entry img {
@@ -387,7 +395,6 @@ class Wetterradar extends IPSModuleStrict
             line-height: 1.25;
             max-width: calc(220px * var(--k));
             z-index: 2000;
-            pointer-events: none;
         }
         @media (min-width: 701px) and (max-width: 1300px) {
             #wr-current {
@@ -396,6 +403,7 @@ class Wetterradar extends IPSModuleStrict
                 min-width: 340px;
                 max-width: 560px;
             }
+            #wr-current-values { flex: 0 0 auto; }
         }
 
         @media (min-width: 540px) {
@@ -490,111 +498,6 @@ class Wetterradar extends IPSModuleStrict
             }
         }
 
-        @media (max-width: 920px) and (min-width: 701px) {
-            #wr-legend {
-                bottom: 22px;
-                left: 8px;
-                max-width: 128px;
-                padding: 6px;
-            }
-            #wr-forecast {
-                bottom: 22px;
-                right: 8px;
-                max-width: min(360px, calc(100% - 156px));
-                overflow-x: auto;
-                overflow-y: hidden;
-                flex-wrap: nowrap;
-            }
-            .wr-forecast-entry {
-                flex: 0 0 auto;
-            }
-        }
-
-        @media (max-width: 700px) {
-            #wr-legend {
-                display: block;
-                left: 8px;
-                bottom: 22px;
-                max-width: 112px;
-                padding: 5px 6px;
-                font-size: 8px;
-            }
-            #wr-legend .wr-legend-entry {
-                gap: 3px;
-                margin-bottom: 2px;
-                line-height: 1.05;
-            }
-            #wr-legend .wr-legend-color {
-                width: 12px;
-                height: 8px;
-                flex: 0 0 auto;
-            }
-            #wr-forecast {
-                left: auto;
-                right: 8px;
-                bottom: 22px;
-                max-width: min(205px, calc(100% - 140px));
-                padding: 5px 6px;
-                gap: 4px;
-                overflow-x: auto;
-                overflow-y: hidden;
-                justify-content: flex-start;
-                flex-wrap: nowrap;
-            }
-            .wr-forecast-entry {
-                flex: 0 0 30px;
-                min-width: 30px;
-            }
-            .wr-forecast-entry img {
-                width: 26px;
-                height: 26px;
-            }
-            .wr-forecast-entry .wr-day {
-                font-size: 9px;
-                margin-bottom: 1px;
-            }
-            .wr-forecast-entry .wr-temp {
-                font-size: 8px;
-            }
-            #wr-status {
-                left: 8px;
-                bottom: 60px;
-                transform: none;
-                max-width: calc(100% - 16px);
-            }
-        }
-
-        @media (max-width: 430px) {
-            #wr-legend {
-                left: 8px;
-                bottom: 22px;
-                max-width: 96px;
-                padding: 4px 5px;
-                font-size: 7.5px;
-            }
-            #wr-forecast {
-                left: auto;
-                right: 8px;
-                bottom: 22px;
-                max-width: min(175px, calc(100% - 120px));
-                padding: 4px 5px;
-                gap: 3px;
-            }
-            .wr-forecast-entry {
-                flex-basis: 27px;
-                min-width: 27px;
-            }
-            .wr-forecast-entry img {
-                width: 23px;
-                height: 23px;
-            }
-            .wr-forecast-entry .wr-day {
-                font-size: 8px;
-            }
-            .wr-forecast-entry .wr-temp {
-                font-size: 7.5px;
-            }
-        }
     </style>
 
     <div id="map"></div>
