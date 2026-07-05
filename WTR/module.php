@@ -494,13 +494,19 @@ class Wetterradar extends IPSModuleStrict
             #wr-legend {
                 bottom: 22px;
                 left: 8px;
-                max-width: 138px;
+                max-width: 128px;
+                padding: 6px;
             }
             #wr-forecast {
                 bottom: 22px;
                 right: 8px;
-                max-width: calc(100% - 170px);
+                max-width: min(360px, calc(100% - 156px));
                 overflow-x: auto;
+                overflow-y: hidden;
+                flex-wrap: nowrap;
+            }
+            .wr-forecast-entry {
+                flex: 0 0 auto;
             }
         }
 
@@ -509,20 +515,46 @@ class Wetterradar extends IPSModuleStrict
                 display: block;
                 left: 8px;
                 bottom: 22px;
-                max-width: 130px;
+                max-width: 112px;
+                padding: 5px 6px;
+                font-size: 8px;
+            }
+            #wr-legend .wr-legend-entry {
+                gap: 3px;
+                margin-bottom: 2px;
+                line-height: 1.05;
+            }
+            #wr-legend .wr-legend-color {
+                width: 12px;
+                height: 8px;
+                flex: 0 0 auto;
             }
             #wr-forecast {
                 left: auto;
                 right: 8px;
                 bottom: 22px;
-                max-width: calc(100% - 160px);
+                max-width: min(205px, calc(100% - 140px));
+                padding: 5px 6px;
+                gap: 4px;
                 overflow-x: auto;
                 overflow-y: hidden;
                 justify-content: flex-start;
                 flex-wrap: nowrap;
             }
             .wr-forecast-entry {
-                flex: 0 0 auto;
+                flex: 0 0 30px;
+                min-width: 30px;
+            }
+            .wr-forecast-entry img {
+                width: 26px;
+                height: 26px;
+            }
+            .wr-forecast-entry .wr-day {
+                font-size: 9px;
+                margin-bottom: 1px;
+            }
+            .wr-forecast-entry .wr-temp {
+                font-size: 8px;
             }
             #wr-status {
                 left: 8px;
@@ -536,13 +568,31 @@ class Wetterradar extends IPSModuleStrict
             #wr-legend {
                 left: 8px;
                 bottom: 22px;
-                max-width: 130px;
+                max-width: 96px;
+                padding: 4px 5px;
+                font-size: 7.5px;
             }
             #wr-forecast {
                 left: auto;
                 right: 8px;
-                bottom: 96px;
-                max-width: calc(100% - 16px);
+                bottom: 22px;
+                max-width: min(175px, calc(100% - 120px));
+                padding: 4px 5px;
+                gap: 3px;
+            }
+            .wr-forecast-entry {
+                flex-basis: 27px;
+                min-width: 27px;
+            }
+            .wr-forecast-entry img {
+                width: 23px;
+                height: 23px;
+            }
+            .wr-forecast-entry .wr-day {
+                font-size: 8px;
+            }
+            .wr-forecast-entry .wr-temp {
+                font-size: 7.5px;
             }
         }
     </style>
