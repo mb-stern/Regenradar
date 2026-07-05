@@ -96,6 +96,10 @@ class Regenradar extends IPSModuleStrict
                     'caption' => 'Wetterdaten',
                     'items' => [
                         [
+                            'type'    => 'Label',
+                            'caption' => "Das Modul erfordert eine installierte OpenWeatherOneCall Instanz. Bitte installieren Sie das Modul und legen Sie eine Instanz an."
+                        ],
+                        [
                             'type' => 'SelectObject',
                             'name' => 'OpenWeatherInstanceID',
                             'caption' => 'OpenWeatherOneCall Instanz',
