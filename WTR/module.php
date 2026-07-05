@@ -272,7 +272,7 @@ class Wetterradar extends IPSModuleStrict
             height: var(--wr-icon);
         }
         #wr-legend {
-            bottom: 34px;
+            bottom: 22px;
             left: 10px;
             font-size: var(--wr-fs-tiny);
         }
@@ -288,7 +288,7 @@ class Wetterradar extends IPSModuleStrict
             border: 1px solid var(--wr-border);
         }
         #wr-forecast {
-            bottom: 34px;
+            bottom: 22px;
             right: 10px;
             display: flex;
             gap: var(--wr-gap);
@@ -492,12 +492,12 @@ class Wetterradar extends IPSModuleStrict
 
         @media (max-width: 920px) and (min-width: 701px) {
             #wr-legend {
-                bottom: 34px;
+                bottom: 22px;
                 left: 8px;
                 max-width: 138px;
             }
             #wr-forecast {
-                bottom: 34px;
+                bottom: 22px;
                 right: 8px;
                 max-width: calc(100% - 170px);
                 overflow-x: auto;
@@ -508,14 +508,14 @@ class Wetterradar extends IPSModuleStrict
             #wr-forecast {
                 left: 8px;
                 right: 8px;
-                bottom: 34px;
+                bottom: 22px;
                 justify-content: flex-end;
                 overflow-x: auto;
             }
             #wr-legend { display: none; }
             #wr-status {
                 left: 8px;
-                bottom: 72px;
+                bottom: 60px;
                 transform: none;
                 max-width: calc(100% - 16px);
             }
@@ -938,7 +938,7 @@ function wrPlaceControlsOnPhone() {
         const isPhone = window.matchMedia('(max-width: 539px)').matches;
         if (isPhone) {
             const rect = current.getBoundingClientRect();
-            const top = rect.top + rect.height + 4 + window.scrollY;
+            const top = rect.top + rect.height + window.scrollY;
             controls.style.top = top + 'px';
         } else {
             controls.style.top = '10px';
