@@ -191,12 +191,28 @@ class Wetterradar extends IPSModuleStrict
             JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP
         );
 
-        $html = file_get_contents(__DIR__ . DIRECTORY_SEPARATOR . 'module.html');
-        if ($html === false) {
-            return '<div>module.html fehlt</div>';
+        return <<<HTML
+        <div style="padding:12px;font-family:sans-serif;">
+            <h3>Wetterradar</h3>
+            <div id="status">Initialisierung...</div>
+        </div>
+
+        <script>
+        const initialData = {$initialJson};
+
+        function render(data) {
+            document.getElementById('status').textContent =
+                'HTML-SDK aktiv: ' + data.type;
         }
 
-        return str_replace('%%INITIAL_JSON%%', (string) $initialJson, $html);
+        render(initialData);
+
+        function handleMessage(message) {
+            const data = JSON.parse(message);
+            render(data);
+        }
+        </script>
+        HTML;
     }
 
     public function UpdateWeather(): void
