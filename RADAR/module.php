@@ -42,19 +42,7 @@ class Wetterradar extends IPSModuleStrict
         $this->SetTimerInterval('WeatherUpdate', $weatherSeconds * 1000);
 
         $provider = $this->ReadPropertyString('RadarProvider');
-        if ($provider === 'rainbow' && trim($this->ReadPropertyString('RainbowApiKey')) === '') {
-            $this->SetStatus(202);
-            return;
-        }
-
-        if ($this->ReadPropertyInteger('OpenWeatherInstanceID') <= 0) {
-            $this->SetStatus(201);
-            // Radar kann trotzdem mit Fallback-Koordinaten laufen.
-            $this->UpdateRadar();
-            return;
-        }
-
-        $this->SetStatus(101);
+    
         $this->UpdateWeather();
         $this->UpdateRadar();
     }
@@ -186,23 +174,6 @@ class Wetterradar extends IPSModuleStrict
                     'caption' => 'Radar jetzt aktualisieren',
                     'onClick' => 'WTR_UpdateRadar($id);',
                 ],
-            ],
-            'status' => [
-                [
-                    'code' => 102,
-                    'icon' => 'active',
-                    'caption' => 'Instanz ist aktiv'
-                ],
-                [
-                    'code' => 201,
-                    'icon' => 'error',
-                    'caption' => 'OpenWeather-Instanz fehlt oder ist ungültig'
-                ],
-                [
-                    'code' => 202,
-                    'icon' => 'error',
-                    'caption' => 'Rainbow ist aktiv, aber API-Key fehlt'
-                ]
             ],
         ];
 
