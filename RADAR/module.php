@@ -40,11 +40,6 @@ class Wetterradar extends IPSModuleStrict
 
         $this->SetTimerInterval('RadarUpdate', $radarSeconds * 1000);
         $this->SetTimerInterval('WeatherUpdate', $weatherSeconds * 1000);
-
-        $provider = $this->ReadPropertyString('RadarProvider');
-    
-        $this->UpdateWeather();
-        $this->UpdateRadar();
     }
 
     public function RequestAction(string $Ident, mixed $Value): void
