@@ -2,6 +2,7 @@
 
 class Wetterradar extends IPSModuleStrict
 {
+    // AUTOPLAY-FIX 2026-07-05: Autoplay in Konfiguration ergänzt.
     // TIMER-FIX 2026-07-05: Wetter/Forecast per VM_UPDATE, nur Radar konfigurierbar, Wetter-Fallback intern 60 Minuten.
     // DESIGN-FIX 2026-07-05: Tooltip und Forecast-CSS real angepasst (nicht identische Datei).
     // Patch 2026-07-05: Steuerpanel mit Zurück / Play-Pause / Vor / Zeit-Slider wie im Script integriert.
@@ -22,6 +23,7 @@ class Wetterradar extends IPSModuleStrict
         $this->RegisterPropertyString('RainbowLayer', 'precip');
         $this->RegisterPropertyInteger('RainbowColor', 5);
         $this->RegisterPropertyInteger('RadarRefreshSeconds', 600);
+        $this->RegisterPropertyBoolean('EnableAutoplay', false);
         $this->RegisterPropertyInteger('Zoom', 7);
         $this->RegisterPropertyString('Theme', 'dark');
         $this->RegisterPropertyString('MapStyle', 'street');
@@ -176,6 +178,7 @@ class Wetterradar extends IPSModuleStrict
                         ]
                     ],
                         ['type' => 'NumberSpinner', 'name' => 'RadarRefreshSeconds', 'caption' => 'Radar aktualisieren alle Sekunden', 'minimum' => 60],
+                        ['type' => 'CheckBox', 'name' => 'EnableAutoplay', 'caption' => 'Autoplay aktivieren'],
                     ],
                 ],
                 [
@@ -652,6 +655,7 @@ let wrBaseLayer = null;
 let wrRadarLayer = null;
 let wrData = WR_INITIAL;
 let wrRadarPayload = null;
+let wrConfig = (WR_INITIAL && WR_INITIAL.data && WR_INITIAL.data.config) ? WR_INITIAL.data.config : {};
 let wrFrames = [];
 let wrFrameIndex = 0;
 let wrAnimationTimer = null;
@@ -944,10 +948,16 @@ function wrRenderRadar(payload) {
     }
 
     wrShowFrame(wrFrameIndex);
+
+    if (wrConfig && wrConfig.enableAutoplay) {
+        wrPlayAnimation();
+    }
 }
 
 function wrHandlePayload(payload) {
     if (!payload || !payload.type) return;
+    wrData = payload;
+    if (payload.data && payload.data.config) wrConfig = payload.data.config;
 
     if (payload.type === 'reload') {
         try {
@@ -1076,6 +1086,7 @@ HTML;
             'theme' => $this->ReadPropertyString('Theme'),
             'radarMaxZoom' => $radarMaxZoom,
             'radarRefreshSeconds' => max(60, $this->ReadPropertyInteger('RadarRefreshSeconds')),
+            'enableAutoplay' => $this->ReadPropertyBoolean('EnableAutoplay'),
             'mapTileUrl' => $mapTileUrl,
             'mapAttribution' => $mapAttribution,
             'mapSubdomains' => $subdomains
