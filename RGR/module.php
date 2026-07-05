@@ -24,10 +24,10 @@ class Regenradar extends IPSModuleStrict
         $this->RegisterPropertyString('Theme', 'dark');
         $this->RegisterPropertyString('MapStyle', 'street');
 
-        $this->RegisterTimer('RadarUpdate', 0, 'WTR_UpdateRadar($_IPS["TARGET"]);');
+        $this->RegisterTimer('RadarUpdate', 0, 'RGR_UpdateRadar($_IPS["TARGET"]);');
         // Interner Fallback: Wetter/Forecast wird primär per VM_UPDATE aktualisiert.
         // Dieser Timer bleibt bewusst nicht konfigurierbar.
-        $this->RegisterTimer('WeatherUpdate', 0, 'WTR_UpdateWeather($_IPS["TARGET"]);');
+        $this->RegisterTimer('WeatherUpdate', 0, 'RGR_UpdateWeather($_IPS["TARGET"]);');
 
         // Gemerkte Variablen, auf deren VM_UPDATE die Wetter-/Forecast-Anzeige sofort aktualisiert wird.
         $this->RegisterAttributeString('WeatherWatchIDs', '[]');
