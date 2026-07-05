@@ -68,7 +68,7 @@ class Regenradar extends IPSModuleStrict
 
         $this->SendDebug(
             'MessageSink',
-            'VM_UPDATE von Variable ID ' . $SenderID . ' erkannt, Wetterdaten werden aktualisiert.',
+            'VM_UPDATE von "' . IPS_GetName($SenderID) . '" (ID ' . $SenderID . ') erkannt, Wetterdaten werden aktualisiert.',
             0
         );
 
