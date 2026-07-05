@@ -82,13 +82,36 @@ class Wetterradar extends IPSModuleStrict
                     'type' => 'ExpansionPanel',
                     'caption' => 'Wetterdaten',
                     'items' => [
-                        ['type' => 'NumberSpinner', 'name' => 'OpenWeatherInstanceID', 'caption' => 'OpenWeatherOneCall Instanz-ID', 'minimum' => 0],
-                        ['type' => 'NumberSpinner', 'name' => 'TemperatureID', 'caption' => 'Temperatur Variable-ID (0 = OpenWeather)', 'minimum' => 0],
-                        ['type' => 'NumberSpinner', 'name' => 'HumidityID', 'caption' => 'Luftfeuchte Variable-ID (0 = OpenWeather)', 'minimum' => 0],
-                        ['type' => 'NumberSpinner', 'name' => 'WindSpeedID', 'caption' => 'Wind Variable-ID (0 = OpenWeather)', 'minimum' => 0],
-                        ['type' => 'NumberSpinner', 'name' => 'Rain1hID', 'caption' => 'Regen 1h Variable-ID (0 = OpenWeather)', 'minimum' => 0],
-                        ['type' => 'NumberSpinner', 'name' => 'Latitude', 'caption' => 'Breitengrad Fallback', 'minimum' => -90, 'maximum' => 90, 'digits' => 6],
-                        ['type' => 'NumberSpinner', 'name' => 'Longitude', 'caption' => 'Längengrad Fallback', 'minimum' => -180, 'maximum' => 180, 'digits' => 6],
+                        [
+                            'type' => 'SelectObject',
+                            'name' => 'OpenWeatherInstanceID',
+                            'caption' => 'OpenWeatherOneCall Instanz',
+                            'objectType' => 1
+                        ],
+                        [
+                            'type' => 'SelectObject',
+                            'name' => 'TemperatureID',
+                            'caption' => 'Temperatur Variable (0 = OpenWeather)',
+                            'objectType' => 2
+                        ],
+                        [
+                            'type' => 'SelectObject',
+                            'name' => 'HumidityID',
+                            'caption' => 'Luftfeuchte Variable (0 = OpenWeather)',
+                            'objectType' => 2
+                        ],
+                        [
+                            'type' => 'SelectObject',
+                            'name' => 'WindSpeedID',
+                            'caption' => 'Wind Variable (0 = OpenWeather)',
+                            'objectType' => 2
+                        ],
+                        [
+                            'type' => 'SelectObject',
+                            'name' => 'Rain1hID',
+                            'caption' => 'Regen 1h Variable (0 = OpenWeather)',
+                            'objectType' => 2
+                        ],
                     ],
                 ],
                 [
@@ -165,9 +188,21 @@ class Wetterradar extends IPSModuleStrict
                 ],
             ],
             'status' => [
-                ['code' => IS_ACTIVE, 'icon' => 'active', 'caption' => 'Instanz ist aktiv'],
-                ['code' => 201, 'icon' => 'error', 'caption' => 'OpenWeather-Instanz fehlt oder ist ungültig'],
-                ['code' => 202, 'icon' => 'error', 'caption' => 'Rainbow ist aktiv, aber API-Key fehlt'],
+                [
+                    'code' => IS_ACTIVE,
+                    'icon' => 'active',
+                    'caption' => 'Instanz ist aktiv'
+                ],
+                [
+                    'code' => IS_EBASE + 1,
+                    'icon' => 'error',
+                    'caption' => 'OpenWeather-Instanz fehlt oder ist ungültig'
+                ],
+                [
+                    'code' => IS_EBASE + 2,
+                    'icon' => 'error',
+                    'caption' => 'Rainbow ist aktiv, aber API-Key fehlt'
+                ]
             ],
         ];
 
