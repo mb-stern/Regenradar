@@ -2,6 +2,7 @@
 
 class Wetterradar extends IPSModuleStrict
 {
+    // Patch 2026-07-05: Steuerpanel mit Zurück / Play-Pause / Vor / Zeit-Slider wie im Script integriert.
     public function Create(): void
     {
         parent::Create();
@@ -279,6 +280,60 @@ class Wetterradar extends IPSModuleStrict
             gap: var(--wr-gap);
             padding: 6px 8px;
         }
+        #wr-controls {
+            top: 10px;
+            right: 10px;
+            width: 130px;
+        }
+        #wr-controls .wr-row {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            column-gap: 2px;
+            margin-bottom: 6px;
+        }
+        #wr-controls button {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 4px 0;
+            font-size: 12px;
+            line-height: 1;
+            border-radius: 2px;
+            background: rgba(255,255,255,.08);
+            color: var(--wr-text);
+            border: 1px solid rgba(255,255,255,.35);
+            appearance: none;
+            cursor: pointer;
+        }
+        #wr-controls button:hover { filter: brightness(1.12); }
+        #wr-controls label {
+            display: block;
+            font-size: 12px;
+            margin: 4px 0 2px;
+        }
+        #wr-frame-slider {
+            width: 100%;
+            height: 18px;
+        }
+        #wr-frame-time {
+            display: block;
+            margin-top: 4px;
+            font-weight: 600;
+            text-align: center;
+            font-size: 12px;
+            cursor: pointer;
+        }
+        .wr-ico {
+            width: 12px;
+            height: 12px;
+            display: inline-block;
+        }
+        .wr-ico svg {
+            width: 100%;
+            height: 100%;
+            display: block;
+            fill: currentColor;
+        }
         .wr-forecast-entry {
             text-align: center;
             min-width: 42px;
@@ -298,11 +353,7 @@ class Wetterradar extends IPSModuleStrict
             opacity: .9;
         }
         #wr-status {
-            bottom: 10px;
-            left: 50%;
-            transform: translateX(-50%);
-            max-width: 45%;
-            text-align: center;
+            display: none;
         }
         .wr-tooltip {
             position: fixed;
@@ -337,6 +388,12 @@ class Wetterradar extends IPSModuleStrict
                 justify-content: flex-end;
                 overflow-x: auto;
             }
+            #wr-controls {
+                top: auto;
+                right: 8px;
+                bottom: 72px;
+                width: 120px;
+            }
             #wr-legend {
                 display: none;
             }
@@ -358,6 +415,23 @@ class Wetterradar extends IPSModuleStrict
         <div class="wr-value"><img src="https://raw.githubusercontent.com/basmilius/weather-icons/dev/production/fill/svg/wind.svg" alt=""><span id="wr-wind">–</span></div>
         <div class="wr-value"><img src="https://raw.githubusercontent.com/basmilius/weather-icons/dev/production/fill/svg/rain.svg" alt=""><span id="wr-rain">–</span></div>
         <div class="wr-value"><img src="https://raw.githubusercontent.com/basmilius/weather-icons/dev/production/fill/svg/cloudy.svg" alt=""><span id="wr-clouds">–</span></div>
+    </div>
+
+    <div id="wr-controls" class="wr-panel">
+        <div class="wr-row">
+            <button id="wr-btn-prev" title="Vorheriger Frame" aria-label="Vorheriger">
+                <span class="wr-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M15.5 5.5 8.5 12l7 6.5-1.5 1.5L5.5 12l8.5-8.5 1.5 2z"/></svg></span>
+            </button>
+            <button id="wr-btn-play" title="Abspielen" aria-label="Abspielen">
+                <span class="wr-ico" aria-hidden="true"></span>
+            </button>
+            <button id="wr-btn-next" title="Nächster Frame" aria-label="Nächster">
+                <span class="wr-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m8.5 5.5 1.5-2L18.5 12l-8.5 8.5-1.5-1.5 7-6.5-7-6.5z"/></svg></span>
+            </button>
+        </div>
+        <label for="wr-frame-slider">Zeit</label>
+        <input id="wr-frame-slider" type="range" min="0" max="0" step="1" value="0">
+        <span id="wr-frame-time">⏳</span>
     </div>
 
     <div id="wr-legend" class="wr-panel">
@@ -392,6 +466,14 @@ let wrMap = null;
 let wrBaseLayer = null;
 let wrRadarLayer = null;
 let wrData = WR_INITIAL;
+let wrRadarPayload = null;
+let wrFrames = [];
+let wrFrameIndex = 0;
+let wrAnimationTimer = null;
+let wrRadarLayerCache = {};
+const WR_ANIMATION_DELAY_MS = 1000;
+const wrPlaySvg = '<svg viewBox="0 0 24 24"><path d="M8 5l12 7-12 7V5z"/></svg>';
+const wrPauseSvg = '<svg viewBox="0 0 24 24"><path d="M8 5h3v14H8V5zm5 0h3v14h-3V5z"/></svg>';
 
 function wrSetText(id, value) {
     const el = document.getElementById(id);
@@ -438,6 +520,132 @@ function wrShowForecastTooltip(entry, f) {
     t.style.left = left + "px";
     t.style.top = (rect.top - 8) + "px";
     t.style.transform = "translate(0, -100%)";
+}
+
+
+function wrFrameTime(frame) {
+    if (!frame || !frame.time) return 'Keine Radarframes';
+    return new Date(Number(frame.time) * 1000).toLocaleTimeString();
+}
+
+function wrSetPlayState(isPlaying) {
+    const btn = document.getElementById('wr-btn-play');
+    if (!btn) return;
+    btn.title = isPlaying ? 'Pause' : 'Abspielen';
+    btn.setAttribute('aria-label', isPlaying ? 'Pause' : 'Abspielen');
+    const ico = btn.querySelector('.wr-ico');
+    if (ico) ico.innerHTML = isPlaying ? wrPauseSvg : wrPlaySvg;
+}
+
+function wrStopAnimation() {
+    if (wrAnimationTimer) {
+        clearTimeout(wrAnimationTimer);
+        wrAnimationTimer = null;
+    }
+    wrSetPlayState(false);
+}
+
+function wrWrapFrameIndex(index) {
+    if (!wrFrames.length) return 0;
+    while (index >= wrFrames.length) index -= wrFrames.length;
+    while (index < 0) index += wrFrames.length;
+    return index;
+}
+
+function wrBuildRadarLayer(frame) {
+    if (!wrRadarPayload || !frame) return null;
+
+    if (wrRadarPayload.provider === 'rainviewer') {
+        const host = wrRadarPayload.host || '';
+        const tileSize = window.devicePixelRatio >= 2 ? 512 : 256;
+        return L.tileLayer(
+            host + frame.path + '/' + tileSize + '/{z}/{x}/{y}/2/1_1.png',
+            { tileSize: 256, opacity: 0, maxNativeZoom: 7, maxZoom: 7 }
+        );
+    }
+
+    if (wrRadarPayload.provider === 'rainbow') {
+        return L.tileLayer(
+            frame.url,
+            { tileSize: 256, opacity: 0, maxNativeZoom: 12, maxZoom: 12 }
+        );
+    }
+
+    return null;
+}
+
+function wrShowFrame(index) {
+    if (!wrMap || !wrFrames.length) return;
+
+    index = wrWrapFrameIndex(index);
+    const frame = wrFrames[index];
+    const slider = document.getElementById('wr-frame-slider');
+
+    if (wrRadarLayer && wrRadarLayer !== wrRadarLayerCache[index]) {
+        try { wrRadarLayer.setOpacity(0); } catch(e) {}
+    }
+
+    let layer = wrRadarLayerCache[index] || null;
+    if (!layer) {
+        layer = wrBuildRadarLayer(frame);
+        if (!layer) return;
+        wrRadarLayerCache[index] = layer;
+        layer.addTo(wrMap);
+    }
+
+    layer.setOpacity(0.5);
+    wrRadarLayer = layer;
+    wrFrameIndex = index;
+
+    if (slider) slider.value = String(index);
+    wrSetText('wr-frame-time', wrFrameTime(frame));
+}
+
+function wrPlayAnimation() {
+    wrStopAnimation();
+    wrSetPlayState(true);
+
+    function step() {
+        wrShowFrame(wrFrameIndex + 1);
+        wrAnimationTimer = setTimeout(step, WR_ANIMATION_DELAY_MS);
+    }
+
+    wrAnimationTimer = setTimeout(step, WR_ANIMATION_DELAY_MS);
+}
+
+function wrToggleAnimation() {
+    if (wrAnimationTimer) {
+        wrStopAnimation();
+        return;
+    }
+    wrPlayAnimation();
+}
+
+function wrClearRadarLayers() {
+    for (const key in wrRadarLayerCache) {
+        if (Object.prototype.hasOwnProperty.call(wrRadarLayerCache, key)) {
+            try { wrMap.removeLayer(wrRadarLayerCache[key]); } catch(e) {}
+        }
+    }
+    wrRadarLayerCache = {};
+    wrRadarLayer = null;
+}
+
+function wrSetupControls() {
+    wrSetPlayState(false);
+
+    const prev = document.getElementById('wr-btn-prev');
+    const next = document.getElementById('wr-btn-next');
+    const play = document.getElementById('wr-btn-play');
+    const slider = document.getElementById('wr-frame-slider');
+
+    if (prev) prev.addEventListener('click', function() { wrStopAnimation(); wrShowFrame(wrFrameIndex - 1); });
+    if (next) next.addEventListener('click', function() { wrStopAnimation(); wrShowFrame(wrFrameIndex + 1); });
+    if (play) play.addEventListener('click', wrToggleAnimation);
+    if (slider) slider.addEventListener('input', function(e) {
+        wrStopAnimation();
+        wrShowFrame(parseInt(e.target.value, 10));
+    });
 }
 
 function wrRenderForecast(forecast) {
@@ -518,48 +726,35 @@ function wrInitMap(config) {
 function wrRenderRadar(payload) {
     if (!payload || !wrMap) return;
 
-    if (wrRadarLayer) {
-        try { wrMap.removeLayer(wrRadarLayer); } catch(e) {}
-        wrRadarLayer = null;
-    }
+    wrStopAnimation();
+    wrRadarPayload = payload;
+    wrClearRadarLayers();
 
-    if (payload.provider === 'rainviewer' && payload.frames && payload.frames.length > 0) {
-        const frame = payload.frames[payload.frames.length - 1];
-        const host = payload.host || '';
-        const tileSize = window.devicePixelRatio >= 2 ? 512 : 256;
+    wrFrames = Array.isArray(payload.frames) ? payload.frames.slice() : [];
+    const slider = document.getElementById('wr-frame-slider');
 
-        wrRadarLayer = L.tileLayer(
-            host + frame.path + '/' + tileSize + '/{z}/{x}/{y}/2/1_1.png',
-            {
-                tileSize: 256,
-                opacity: 0.5,
-                maxNativeZoom: 7,
-                maxZoom: 7
-            }
-        ).addTo(wrMap);
-
-        wrSetText('wr-status', 'Rainviewer: ' + new Date(frame.time * 1000).toLocaleTimeString());
+    if (!wrFrames.length) {
+        if (slider) {
+            slider.max = '0';
+            slider.value = '0';
+        }
+        wrSetText('wr-frame-time', payload.error || 'Keine Radardaten');
         return;
     }
 
-    if (payload.provider === 'rainbow' && payload.frames && payload.frames.length > 0) {
-        const frame = payload.frames[Math.floor(payload.frames.length / 2)];
-
-        wrRadarLayer = L.tileLayer(
-            frame.url,
-            {
-                tileSize: 256,
-                opacity: 0.5,
-                maxNativeZoom: 12,
-                maxZoom: 12
-            }
-        ).addTo(wrMap);
-
-        wrSetText('wr-status', 'Rainbow: ' + new Date(frame.time * 1000).toLocaleTimeString());
-        return;
+    if (slider) {
+        slider.max = String(wrFrames.length - 1);
+        slider.value = '0';
     }
 
-    wrSetText('wr-status', payload.error || 'Keine Radardaten');
+    // wie im Script: Rainviewer startet beim letzten Past-Frame; Rainbow in der Mitte der Timeline.
+    if (payload.provider === 'rainviewer') {
+        wrFrameIndex = wrFrames.length - 1;
+    } else {
+        wrFrameIndex = Math.floor(wrFrames.length / 2);
+    }
+
+    wrShowFrame(wrFrameIndex);
 }
 
 function wrHandlePayload(payload) {
@@ -592,6 +787,7 @@ function handleMessage(message) {
     }
 }
 
+wrSetupControls();
 wrHandlePayload(WR_INITIAL);
 setTimeout(function() {
     if (wrMap) wrMap.invalidateSize();
