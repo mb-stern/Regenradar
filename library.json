@@ -1,0 +1,12 @@
+{
+    "id": "{DB50C4EC-FDBA-B067-9B7F-08D5BA8DF1D1}",
+    "name": "Reolink",
+    "author": "Stefan Künzli",
+    "url": "https://github.com/mb-stern/Wetterradar",
+    "compatibility": {
+        "version": "8.2"
+    },
+    "version": "1.0",
+    "build": 0,
+    "date": 0
+}
