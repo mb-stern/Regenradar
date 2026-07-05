@@ -2,10 +2,6 @@
 
 class Wetterradar extends IPSModuleStrict
 {
-    // AUTOPLAY-FIX 2026-07-05: Autoplay in Konfiguration ergänzt.
-    // TIMER-FIX 2026-07-05: Wetter/Forecast per VM_UPDATE, nur Radar konfigurierbar, Wetter-Fallback intern 60 Minuten.
-    // DESIGN-FIX 2026-07-05: Tooltip und Forecast-CSS real angepasst (nicht identische Datei).
-    // Patch 2026-07-05: Steuerpanel mit Zurück / Play-Pause / Vor / Zeit-Slider wie im Script integriert.
     public function Create(): void
     {
         parent::Create();
@@ -766,22 +762,52 @@ function wrBuildRadarLayer(frame) {
     return null;
 }
 
+function wrRadarCacheKey(frame) {
+    if (!wrRadarPayload || !frame) return '';
+
+    // Wichtig: nicht nach Index cachen, weil sich die Timeline beim nächsten Radar-Update verschiebt.
+    // Der Key enthält Provider + Zeit + Tile-Quelle. Dadurch werden unveränderte Frames wiederverwendet,
+    // aber Provider-/Layer-/Farbwechsel oder neue URLs trotzdem sauber neu geladen.
+    if (wrRadarPayload.provider === 'rainviewer') {
+        return 'rainviewer|' + String(frame.time || '') + '|' + String(frame.path || '');
+    }
+
+    if (wrRadarPayload.provider === 'rainbow') {
+        return 'rainbow|' + String(frame.time || '') + '|' + String(frame.url || '');
+    }
+
+    return String(frame.time || '') + '|' + JSON.stringify(frame);
+}
+
+function wrPruneRadarLayerCache(validKeys) {
+    for (const key in wrRadarLayerCache) {
+        if (Object.prototype.hasOwnProperty.call(wrRadarLayerCache, key) && !validKeys[key]) {
+            try { wrMap.removeLayer(wrRadarLayerCache[key]); } catch(e) {}
+            if (wrRadarLayer === wrRadarLayerCache[key]) {
+                wrRadarLayer = null;
+            }
+            delete wrRadarLayerCache[key];
+        }
+    }
+}
+
 function wrShowFrame(index) {
     if (!wrMap || !wrFrames.length) return;
 
     index = wrWrapFrameIndex(index);
     const frame = wrFrames[index];
+    const cacheKey = wrRadarCacheKey(frame);
     const slider = document.getElementById('wr-frame-slider');
 
-    if (wrRadarLayer && wrRadarLayer !== wrRadarLayerCache[index]) {
+    if (wrRadarLayer && wrRadarLayer !== wrRadarLayerCache[cacheKey]) {
         try { wrRadarLayer.setOpacity(0); } catch(e) {}
     }
 
-    let layer = wrRadarLayerCache[index] || null;
+    let layer = wrRadarLayerCache[cacheKey] || null;
     if (!layer) {
         layer = wrBuildRadarLayer(frame);
         if (!layer) return;
-        wrRadarLayerCache[index] = layer;
+        wrRadarLayerCache[cacheKey] = layer;
         layer.addTo(wrMap);
     }
 
@@ -921,9 +947,18 @@ function wrRenderRadar(payload) {
 
     wrStopAnimation();
     wrRadarPayload = payload;
-    wrClearRadarLayers();
 
     wrFrames = Array.isArray(payload.frames) ? payload.frames.slice() : [];
+
+    // Bestehende Radar-TileLayer behalten, solange der Frame in der neuen Timeline noch existiert.
+    // So werden unveränderte Frames beim Timer-Update nicht unnötig neu geladen.
+    const validCacheKeys = {};
+    wrFrames.forEach(function(frame) {
+        const key = wrRadarCacheKey(frame);
+        if (key) validCacheKeys[key] = true;
+    });
+    wrPruneRadarLayerCache(validCacheKeys);
+
     const slider = document.getElementById('wr-frame-slider');
 
     if (!wrFrames.length) {
