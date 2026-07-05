@@ -18,7 +18,6 @@ class Wetterradar extends IPSModuleStrict
         $this->RegisterPropertyString('RainbowApiKey', '');
         $this->RegisterPropertyString('RainbowLayer', 'precip');
         $this->RegisterPropertyInteger('RainbowColor', 5);
-        $this->RegisterPropertyInteger('RainviewerColorScheme', 2);
         $this->RegisterPropertyInteger('RadarRefreshSeconds', 600);
         $this->RegisterPropertyBoolean('EnableAutoplay', false);
         $this->RegisterPropertyInteger('Zoom', 7);
@@ -139,22 +138,6 @@ class Wetterradar extends IPSModuleStrict
                             'options' => [
                                 ['caption' => 'Rainviewer', 'value' => 'rainviewer'],
                                 ['caption' => 'Rainbow', 'value' => 'rainbow'],
-                            ],
-                        ],
-                        [
-                            'type' => 'Select',
-                            'name' => 'RainviewerColorScheme',
-                            'caption' => 'RainViewer Farbschema',
-                            'options' => [
-                                ['caption' => '0 - RainViewer 0', 'value' => 0],
-                                ['caption' => '1 - RainViewer 1', 'value' => 1],
-                                ['caption' => '2 - RainViewer 2', 'value' => 2],
-                                ['caption' => '3 - RainViewer 3', 'value' => 3],
-                                ['caption' => '4 - RainViewer 4', 'value' => 4],
-                                ['caption' => '5 - RainViewer 5', 'value' => 5],
-                                ['caption' => '6 - RainViewer 6', 'value' => 6],
-                                ['caption' => '7 - RainViewer 7', 'value' => 7],
-                                ['caption' => '8 - RainViewer 8', 'value' => 8],
                             ],
                         ],
                         ['type' => 'ValidationTextBox', 'name' => 'RainbowApiKey', 'caption' => 'Rainbow API-Key'],
@@ -353,6 +336,37 @@ class Wetterradar extends IPSModuleStrict
             width: var(--wr-legend-swatch-w);
             height: var(--wr-legend-swatch-h);
             border: 1px solid var(--wr-border);
+        }
+        #wr-legend .wr-legend-title {
+            font-weight: 600;
+            margin-bottom: calc(4px * var(--k));
+            font-size: var(--wr-fs-tiny);
+            white-space: nowrap;
+        }
+        #wr-legend .wr-legend-image {
+            display: block;
+            width: calc(120px * var(--k));
+            max-width: 100%;
+            height: calc(10px * var(--k));
+            object-fit: fill;
+            border: 1px solid var(--wr-border);
+            background: rgba(255,255,255,.08);
+            margin-bottom: calc(3px * var(--k));
+        }
+        #wr-legend .wr-legend-scale {
+            display: flex;
+            justify-content: space-between;
+            gap: calc(6px * var(--k));
+            font-size: calc(8px * var(--k));
+            opacity: .9;
+            line-height: 1.1;
+        }
+        #wr-legend .wr-legend-note {
+            margin-top: calc(3px * var(--k));
+            font-size: calc(8px * var(--k));
+            opacity: .75;
+            line-height: 1.1;
+            max-width: calc(130px * var(--k));
         }
         #wr-forecast {
             bottom: 10px;
@@ -748,9 +762,8 @@ function wrBuildRadarLayer(frame) {
     if (wrRadarPayload.provider === 'rainviewer') {
         const host = wrRadarPayload.host || '';
         const tileSize = window.devicePixelRatio >= 2 ? 512 : 256;
-        const colorScheme = Number.isFinite(Number(wrConfig.rainviewerColorScheme)) ? Number(wrConfig.rainviewerColorScheme) : 2;
         return L.tileLayer(
-            host + frame.path + '/' + tileSize + '/{z}/{x}/{y}/' + colorScheme + '/1_1.png',
+            host + frame.path + '/' + tileSize + '/{z}/{x}/{y}/2/1_1.png',
             { tileSize: 256, opacity: 0, maxNativeZoom: 7, maxZoom: 7 }
         );
     }
@@ -772,7 +785,7 @@ function wrRadarCacheKey(frame) {
     // Der Key enthält Provider + Zeit + Tile-Quelle. Dadurch werden unveränderte Frames wiederverwendet,
     // aber Provider-/Layer-/Farbwechsel oder neue URLs trotzdem sauber neu geladen.
     if (wrRadarPayload.provider === 'rainviewer') {
-        return 'rainviewer|' + String(wrConfig.rainviewerColorScheme || 2) + '|' + String(frame.time || '') + '|' + String(frame.path || '');
+        return 'rainviewer|' + String(frame.time || '') + '|' + String(frame.path || '');
     }
 
     if (wrRadarPayload.provider === 'rainbow') {
@@ -852,36 +865,6 @@ function wrClearRadarLayers() {
     wrRadarLayer = null;
 }
 
-
-function wrRenderLegend(config) {
-    const legend = document.getElementById('wr-legend');
-    if (!legend) return;
-
-    const items = config && Array.isArray(config.legend) ? config.legend : [];
-    legend.innerHTML = '';
-
-    if (!items.length) {
-        legend.style.display = 'none';
-        return;
-    }
-
-    legend.style.display = 'block';
-    items.forEach(function(item) {
-        if (!item || !item.color || !item.label) return;
-        const entry = document.createElement('div');
-        entry.className = 'wr-legend-entry';
-
-        const swatch = document.createElement('div');
-        swatch.className = 'wr-legend-color';
-        swatch.style.background = item.color;
-
-        const label = document.createTextNode(' ' + item.label);
-        entry.appendChild(swatch);
-        entry.appendChild(label);
-        legend.appendChild(entry);
-    });
-}
-
 function wrSetupControls() {
     wrSetPlayState(false);
 
@@ -936,6 +919,67 @@ function wrRenderForecast(forecast) {
     });
 }
 
+function wrEscapeHtml(value) {
+    return String(value == null ? '' : value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+function wrRenderLegend(legend) {
+    const box = document.getElementById('wr-legend');
+    if (!box) return;
+
+    if (!legend) {
+        box.style.display = 'none';
+        return;
+    }
+
+    box.style.display = 'block';
+    box.innerHTML = '';
+
+    if (legend.title) {
+        const title = document.createElement('div');
+        title.className = 'wr-legend-title';
+        title.textContent = legend.title;
+        box.appendChild(title);
+    }
+
+    if (legend.type === 'image' && legend.image) {
+        const img = document.createElement('img');
+        img.className = 'wr-legend-image';
+        img.alt = legend.title || 'Radar-Farbskala';
+        img.src = legend.image;
+        box.appendChild(img);
+
+        const scale = document.createElement('div');
+        scale.className = 'wr-legend-scale';
+        scale.innerHTML = '<span>leicht</span><span>stark</span>';
+        box.appendChild(scale);
+
+        if (legend.note) {
+            const note = document.createElement('div');
+            note.className = 'wr-legend-note';
+            note.textContent = legend.note;
+            box.appendChild(note);
+        }
+        return;
+    }
+
+    if (Array.isArray(legend.entries)) {
+        legend.entries.forEach(function(entry) {
+            const row = document.createElement('div');
+            row.className = 'wr-legend-entry';
+            row.innerHTML =
+                '<div class="wr-legend-color" style="background:' + wrEscapeHtml(entry.color || '#999') + ';"></div> ' +
+                wrEscapeHtml(entry.label || '');
+            box.appendChild(row);
+        });
+    }
+}
+
 function wrRenderWeather(payload) {
     if (!payload || !payload.current) return;
 
@@ -949,6 +993,8 @@ function wrRenderWeather(payload) {
 
 function wrInitMap(config) {
     if (!config || wrMap) return;
+
+    wrRenderLegend(config.legend || null);
 
     const root = document.getElementById('wetterradar-root');
     if (root && config.theme === 'light') {
@@ -1025,7 +1071,10 @@ function wrRenderRadar(payload) {
 function wrHandlePayload(payload) {
     if (!payload || !payload.type) return;
     wrData = payload;
-    if (payload.data && payload.data.config) wrConfig = payload.data.config;
+    if (payload.data && payload.data.config) {
+        wrConfig = payload.data.config;
+        wrRenderLegend(wrConfig.legend || null);
+    }
 
     if (payload.type === 'reload') {
         try {
@@ -1034,7 +1083,6 @@ function wrHandlePayload(payload) {
         } catch (e) {
             if (payload.data) {
                 wrInitMap(payload.data.config);
-                wrRenderLegend(payload.data.config);
                 wrRenderWeather(payload.data.weather);
                 wrRenderRadar(payload.data.radar);
             }
@@ -1044,7 +1092,6 @@ function wrHandlePayload(payload) {
 
     if (payload.type === 'init') {
         wrInitMap(payload.data.config);
-        wrRenderLegend(payload.data.config);
         wrRenderWeather(payload.data.weather);
         wrRenderRadar(payload.data.radar);
         return;
@@ -1156,10 +1203,8 @@ HTML;
             'theme' => $this->ReadPropertyString('Theme'),
             'radarMaxZoom' => $radarMaxZoom,
             'radarRefreshSeconds' => max(60, $this->ReadPropertyInteger('RadarRefreshSeconds')),
-            'rainviewerColorScheme' => min(max(0, $this->ReadPropertyInteger('RainviewerColorScheme')), 8),
-            'rainbowColor' => min(max(0, $this->ReadPropertyInteger('RainbowColor')), 9),
-            'legend' => $this->BuildLegendPayload($provider),
             'enableAutoplay' => $this->ReadPropertyBoolean('EnableAutoplay'),
+            'legend' => $this->BuildRadarLegendPayload(),
             'mapTileUrl' => $mapTileUrl,
             'mapAttribution' => $mapAttribution,
             'mapSubdomains' => $subdomains
@@ -1235,66 +1280,47 @@ HTML;
         return $ids;
     }
 
-
-    private function BuildLegendPayload(string $provider): array
+    private function BuildRadarLegendPayload(): array
     {
+        $provider = $this->ReadPropertyString('RadarProvider');
+
         if ($provider === 'rainbow') {
-            return $this->GetRainbowLegend(min(max(0, $this->ReadPropertyInteger('RainbowColor')), 9));
-        }
+            $color = min(max(0, $this->ReadPropertyInteger('RainbowColor')), 9);
+            $palettes = [
+                0 => ['name' => 'Rainbow', 'image' => 'rainbow_rain.png'],
+                1 => ['name' => 'TWC', 'image' => 'twc_rain.png'],
+                2 => ['name' => 'Dark Sky', 'image' => 'dark_sky_rain.png'],
+                3 => ['name' => 'Meteored', 'image' => 'meteored_rain.png'],
+                4 => ['name' => 'NEXRAD', 'image' => 'nexrad_rain.png'],
+                5 => ['name' => 'Rainviewer', 'image' => 'rainviewer_rain.png'],
+                6 => ['name' => 'SELEX-IS', 'image' => 'selex_rain.png'],
+                7 => ['name' => 'TITAN', 'image' => 'titan_rain.png'],
+                8 => ['name' => 'Universal Blue', 'image' => 'universal_blue_rain.png'],
+                9 => ['name' => 'Rainviewer TWC', 'image' => 'twc_rv_rain.png'],
+            ];
 
-        return $this->GetRainviewerLegend(min(max(0, $this->ReadPropertyInteger('RainviewerColorScheme')), 8));
-    }
+            $palette = $palettes[$color] ?? $palettes[0];
 
-    private function GetRainviewerLegend(int $scheme): array
-    {
-        // Kompakte Modul-Legende: gleiche Intensitätsstufen, Farben passend zum gewählten RainViewer-Schema.
-        $palettes = [
-            0 => ['#9fd3ff', '#2f9cff', '#0068ff', '#ff9900', '#cc0033'],
-            1 => ['#b7e3ff', '#5bbcff', '#0094ff', '#f2c84b', '#d23b3b'],
-            2 => ['#b3d9ff', '#3399ff', '#0066ff', '#cc3300', '#990099'],
-            3 => ['#8fd3ff', '#00a8ff', '#00cc66', '#ffcc00', '#ff3333'],
-            4 => ['#a7f3d0', '#34d399', '#22c55e', '#f59e0b', '#dc2626'],
-            5 => ['#c7f9ff', '#60a5fa', '#2563eb', '#f97316', '#7e22ce'],
-            6 => ['#d8f3ff', '#7dd3fc', '#38bdf8', '#fb923c', '#a855f7'],
-            7 => ['#c4e0ff', '#76b7ff', '#3578ff', '#ff7a00', '#b000b5'],
-            8 => ['#e0f2fe', '#7dd3fc', '#0284c7', '#facc15', '#be123c'],
-        ];
-
-        return $this->BuildLegendItems($palettes[$scheme] ?? $palettes[2]);
-    }
-
-    private function GetRainbowLegend(int $scheme): array
-    {
-        // Rainbow-Paletten 0-9. Die Legende folgt der gewählten Palette und bleibt bewusst kompakt.
-        $palettes = [
-            0 => ['#7dd3fc', '#22c55e', '#facc15', '#f97316', '#a855f7'],
-            1 => ['#5eead4', '#38bdf8', '#facc15', '#fb923c', '#ef4444'],
-            2 => ['#93c5fd', '#60a5fa', '#2563eb', '#f97316', '#7c3aed'],
-            3 => ['#a7f3d0', '#34d399', '#22c55e', '#f59e0b', '#dc2626'],
-            4 => ['#9ae6b4', '#4ade80', '#facc15', '#fb923c', '#ef4444'],
-            5 => ['#b3d9ff', '#3399ff', '#0066ff', '#cc3300', '#990099'],
-            6 => ['#dbeafe', '#93c5fd', '#3b82f6', '#f97316', '#a21caf'],
-            7 => ['#bfdbfe', '#60a5fa', '#1d4ed8', '#f59e0b', '#991b1b'],
-            8 => ['#dff6ff', '#8edbff', '#25a7e0', '#006cba', '#073b8e'],
-            9 => ['#5eead4', '#38bdf8', '#facc15', '#fb923c', '#ef4444'],
-        ];
-
-        return $this->BuildLegendItems($palettes[$scheme] ?? $palettes[5]);
-    }
-
-    private function BuildLegendItems(array $colors): array
-    {
-        $labels = ['Sehr leicht', 'Leicht', 'Mäßig', 'Stark', 'Extrem'];
-        $items = [];
-
-        foreach ($labels as $index => $label) {
-            $items[] = [
-                'label' => $label,
-                'color' => $colors[$index] ?? '#999999'
+            return [
+                'type' => 'image',
+                'title' => 'Rainbow ' . $color . ' - ' . $palette['name'],
+                'image' => 'https://doc.rainbow.ai/images/palletes/' . $palette['image'],
+                'note' => 'offizielle Rainbow-Rain-Palette'
             ];
         }
 
-        return $items;
+        // RainViewer: keine Auswahl mehr; Standard-Legende passend zur festen Tile-URL /2/1_1.png.
+        return [
+            'type' => 'entries',
+            'title' => 'RainViewer Standard',
+            'entries' => [
+                ['color' => '#b3d9ff', 'label' => 'Sehr leicht'],
+                ['color' => '#3399ff', 'label' => 'Leicht'],
+                ['color' => '#0066ff', 'label' => 'Mäßig'],
+                ['color' => '#cc3300', 'label' => 'Stark'],
+                ['color' => '#990099', 'label' => 'Extrem'],
+            ]
+        ];
     }
 
     private function BuildWeatherPayload(): array
@@ -1388,7 +1414,6 @@ HTML;
         return [
             'provider' => 'rainviewer',
             'host' => (string) $data['host'],
-            'colorScheme' => min(max(0, $this->ReadPropertyInteger('RainviewerColorScheme')), 8),
             'frames' => array_values($data['radar']['past']),
             'updatedAt' => time()
         ];
