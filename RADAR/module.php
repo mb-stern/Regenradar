@@ -189,17 +189,17 @@ class Wetterradar extends IPSModuleStrict
             ],
             'status' => [
                 [
-                    'code' => IS_ACTIVE,
+                    'code' => 102,
                     'icon' => 'active',
                     'caption' => 'Instanz ist aktiv'
                 ],
                 [
-                    'code' => IS_EBASE + 1,
+                    'code' => 201,
                     'icon' => 'error',
                     'caption' => 'OpenWeather-Instanz fehlt oder ist ungültig'
                 ],
                 [
-                    'code' => IS_EBASE + 2,
+                    'code' => 202,
                     'icon' => 'error',
                     'caption' => 'Rainbow ist aktiv, aber API-Key fehlt'
                 ]
