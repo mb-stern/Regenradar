@@ -104,25 +104,25 @@ class Regenradar extends IPSModuleStrict
                         [
                             'type' => 'SelectObject',
                             'name' => 'TemperatureID',
-                            'caption' => 'Temperatur Variable (0 = OpenWeather)',
+                            'caption' => 'Temperatur Variable (leer = kommt von OpenWeather)',
                             'objectType' => 2
                         ],
                         [
                             'type' => 'SelectObject',
                             'name' => 'HumidityID',
-                            'caption' => 'Luftfeuchte Variable (0 = OpenWeather)',
+                            'caption' => 'Luftfeuchte Variable (leer = kommt von OpenWeather)',
                             'objectType' => 2
                         ],
                         [
                             'type' => 'SelectObject',
                             'name' => 'WindSpeedID',
-                            'caption' => 'Wind Variable (0 = OpenWeather)',
+                            'caption' => 'Wind Variable (leer = kommt von OpenWeather)',
                             'objectType' => 2
                         ],
                         [
                             'type' => 'SelectObject',
                             'name' => 'Rain1hID',
-                            'caption' => 'Regen 1h Variable (0 = OpenWeather)',
+                            'caption' => 'Regen 1h Variable (leer = kommt von OpenWeather)',
                             'objectType' => 2
                         ],
                     ],
