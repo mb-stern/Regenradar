@@ -53,6 +53,10 @@ class Wetterradar extends IPSModuleStrict
             case 'RefreshRadar':
                 $this->UpdateRadar();
                 return;
+
+            case 'ReloadHtml':
+                $this->ReloadHtml();
+                return;
         }
 
         throw new Exception('Invalid Ident: ' . $Ident);
@@ -169,6 +173,11 @@ class Wetterradar extends IPSModuleStrict
                     'type' => 'Button',
                     'caption' => 'Radar jetzt aktualisieren',
                     'onClick' => 'WTR_UpdateRadar($id);',
+                ],
+                [
+                    'type' => 'Button',
+                    'caption' => 'HTML neu laden',
+                    'onClick' => 'IPS_RequestAction($id, "ReloadHtml", true);',
                 ],
             ],
         ];
@@ -369,18 +378,80 @@ class Wetterradar extends IPSModuleStrict
             z-index: 2000;
             pointer-events: none;
         }
-        @media (max-width: 700px) {
+        @media (min-width: 701px) and (max-width: 1300px) {
+            #wr-current {
+                display: inline-flex;
+                width: max-content;
+                min-width: 340px;
+                max-width: 560px;
+            }
+        }
+
+        @media (max-width: 700px) and (min-width: 540px) {
+            #wr-current {
+                top: 8px;
+                left: 56px;
+                right: auto;
+                transform: none;
+                display: inline-flex;
+                width: max-content;
+                min-width: 0;
+                max-width: calc(100vw - 56px - 16px - (130px + 16px));
+                justify-content: flex-end;
+                text-align: right;
+                flex-wrap: wrap;
+                gap: 6px;
+            }
+            #wr-controls {
+                top: 10px;
+                right: 8px;
+                bottom: auto;
+                width: 130px;
+            }
+        }
+
+        @media (max-width: 539px) {
             #wr-current {
                 top: 8px;
                 left: auto;
                 right: 8px;
                 transform: none;
-                max-width: calc(100% - 72px);
-                flex-wrap: wrap;
+                display: inline-flex;
+                width: max-content;
+                min-width: 0;
+                max-width: calc(100vw - 56px - 16px);
                 justify-content: flex-end;
-                gap: 6px;
                 text-align: right;
+                flex-wrap: wrap;
+                gap: 6px;
             }
+            #wr-controls {
+                left: auto;
+                right: 8px;
+                width: 120px;
+            }
+            #wr-controls .wr-row {
+                display: flex;
+                gap: 4px;
+                margin-bottom: 6px;
+            }
+            #wr-controls button {
+                padding: 6px 0;
+                font-size: 11px;
+                border-radius: 6px;
+            }
+            #wr-controls label  {
+                font-size: 10px;
+                margin: 4px 0 2px;
+            }
+            #wr-frame-slider { height: 16px; }
+            #wr-frame-time {
+                font-size: 10px;
+                margin-top: 4px;
+            }
+        }
+
+        @media (max-width: 700px) {
             #wr-forecast {
                 left: 8px;
                 right: 8px;
@@ -388,15 +459,7 @@ class Wetterradar extends IPSModuleStrict
                 justify-content: flex-end;
                 overflow-x: auto;
             }
-            #wr-controls {
-                top: auto;
-                right: 8px;
-                bottom: 72px;
-                width: 120px;
-            }
-            #wr-legend {
-                display: none;
-            }
+            #wr-legend { display: none; }
             #wr-status {
                 left: 8px;
                 bottom: 72px;
@@ -760,6 +823,20 @@ function wrRenderRadar(payload) {
 function wrHandlePayload(payload) {
     if (!payload || !payload.type) return;
 
+    if (payload.type === 'reload') {
+        try {
+            window.location.reload();
+            return;
+        } catch (e) {
+            if (payload.data) {
+                wrInitMap(payload.data.config);
+                wrRenderWeather(payload.data.weather);
+                wrRenderRadar(payload.data.radar);
+            }
+            return;
+        }
+    }
+
     if (payload.type === 'init') {
         wrInitMap(payload.data.config);
         wrRenderWeather(payload.data.weather);
@@ -787,7 +864,33 @@ function handleMessage(message) {
     }
 }
 
+function wrPlaceControlsOnPhone() {
+    const controls = document.getElementById('wr-controls');
+    const current = document.getElementById('wr-current');
+    if (!controls || !current) return;
+
+    function update() {
+        const isPhone = window.matchMedia('(max-width: 539px)').matches;
+        if (isPhone) {
+            const rect = current.getBoundingClientRect();
+            controls.style.top = (rect.top + rect.height + 8) + 'px';
+            controls.style.bottom = 'auto';
+        } else {
+            controls.style.top = '10px';
+            controls.style.bottom = 'auto';
+        }
+        if (wrMap && wrMap.invalidateSize) {
+            setTimeout(function() { wrMap.invalidateSize(); }, 0);
+        }
+    }
+
+    update();
+    window.addEventListener('resize', update);
+    try { new ResizeObserver(update).observe(document.getElementById('wetterradar-root')); } catch(e) {}
+}
+
 wrSetupControls();
+wrPlaceControlsOnPhone();
 wrHandlePayload(WR_INITIAL);
 setTimeout(function() {
     if (wrMap) wrMap.invalidateSize();
@@ -804,6 +907,15 @@ HTML;
     public function UpdateRadar(): void
     {
         $this->SendVisualizationMessage('radar', $this->BuildRadarPayload());
+    }
+
+    public function ReloadHtml(): void
+    {
+        $this->SendVisualizationMessage('reload', [
+            'config'  => $this->BuildClientConfig(),
+            'weather' => $this->BuildWeatherPayload(),
+            'radar'   => $this->BuildRadarPayload()
+        ]);
     }
 
     private function SendVisualizationMessage(string $type, array $data): void
