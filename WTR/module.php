@@ -75,10 +75,6 @@ class Wetterradar extends IPSModuleStrict
     public function RequestAction(string $Ident, mixed $Value): void
     {
         switch ($Ident) {
-            case 'RefreshWeather':
-                $this->UpdateWeather();
-                return;
-
             case 'RefreshRadar':
                 $this->UpdateRadar();
                 return;
@@ -209,11 +205,6 @@ class Wetterradar extends IPSModuleStrict
                 ],
             ],
             'actions' => [
-                [
-                    'type' => 'Button',
-                    'caption' => 'Wetter + Forecast jetzt aktualisieren',
-                    'onClick' => 'WTR_UpdateWeather($id);',
-                ],
                 [
                     'type' => 'Button',
                     'caption' => 'Radar jetzt aktualisieren',
