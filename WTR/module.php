@@ -180,9 +180,9 @@ class Wetterradar extends IPSModuleStrict
         $initial = [
             'type' => 'init',
             'data' => [
-                'config' => $this->BuildClientConfig(),
+                'config'  => $this->BuildClientConfig(),
                 'weather' => $this->BuildWeatherPayload(),
-                'radar' => $this->BuildRadarPayload()
+                'radar'   => $this->BuildRadarPayload()
             ]
         ];
 
@@ -192,27 +192,153 @@ class Wetterradar extends IPSModuleStrict
         );
 
         return <<<HTML
-        <div style="padding:12px;font-family:sans-serif;">
-            <h3>Wetterradar</h3>
-            <div id="status">Initialisierung...</div>
+    <div id="wetterradar-root" style="width:100%;height:100%;font-family:system-ui,sans-serif;">
+        <div id="map" style="width:100%;height:100%;"></div>
+
+        <div id="wr-current" style="position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:1000;background:rgba(40,40,40,.85);color:white;padding:8px;border-radius:10px;">
+            <span id="wr-temp">–</span>
+            <span id="wr-humidity">–</span>
+            <span id="wr-wind">–</span>
+            <span id="wr-rain">–</span>
+            <span id="wr-clouds">–</span>
         </div>
 
-        <script>
-        const initialData = {$initialJson};
+        <div id="wr-status" style="position:absolute;bottom:10px;left:10px;z-index:1000;background:rgba(40,40,40,.85);color:white;padding:8px;border-radius:10px;">
+            Initialisierung...
+        </div>
+    </div>
 
-        function render(data) {
-            document.getElementById('status').textContent =
-                'HTML-SDK aktiv: ' + data.type;
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css">
+
+    <script>
+    const WR_INITIAL = {$initialJson};
+
+    let wrMap = null;
+    let wrBaseLayer = null;
+    let wrRadarLayer = null;
+    let wrData = WR_INITIAL;
+
+    function wrSetText(id, value) {
+        const el = document.getElementById(id);
+        if (el) el.textContent = value || '–';
+    }
+
+    function wrRenderWeather(payload) {
+        if (!payload || !payload.current) return;
+
+        wrSetText('wr-temp', payload.current.temperature);
+        wrSetText('wr-humidity', payload.current.humidity);
+        wrSetText('wr-wind', payload.current.wind);
+        wrSetText('wr-rain', payload.current.rain);
+        wrSetText('wr-clouds', payload.current.clouds);
+    }
+
+    function wrInitMap(config) {
+        if (!config || wrMap) return;
+
+        wrMap = L.map('map', {
+            zoomControl: true,
+            attributionControl: true,
+            maxZoom: config.radarMaxZoom || 7
+        }).setView([config.lat, config.lon], config.zoom || 7);
+
+        const options = {
+            maxZoom: config.radarMaxZoom || 7,
+            attribution: config.mapAttribution || ''
+        };
+
+        if (Array.isArray(config.mapSubdomains) && config.mapSubdomains.length > 0) {
+            options.subdomains = config.mapSubdomains;
         }
 
-        render(initialData);
+        wrBaseLayer = L.tileLayer(config.mapTileUrl, options).addTo(wrMap);
+        L.marker([config.lat, config.lon]).addTo(wrMap).bindPopup('Standort');
+    }
 
-        function handleMessage(message) {
-            const data = JSON.parse(message);
-            render(data);
+    function wrRenderRadar(payload) {
+        if (!payload || !wrMap) return;
+
+        if (wrRadarLayer) {
+            try { wrMap.removeLayer(wrRadarLayer); } catch(e) {}
+            wrRadarLayer = null;
         }
-        </script>
-        HTML;
+
+        if (payload.provider === 'rainviewer' && payload.frames && payload.frames.length > 0) {
+            const frame = payload.frames[payload.frames.length - 1];
+            const host = payload.host || '';
+            const tileSize = window.devicePixelRatio >= 2 ? 512 : 256;
+
+            wrRadarLayer = L.tileLayer(
+                host + frame.path + '/' + tileSize + '/{z}/{x}/{y}/2/1_1.png',
+                {
+                    tileSize: 256,
+                    opacity: 0.5,
+                    maxNativeZoom: 7,
+                    maxZoom: 7
+                }
+            ).addTo(wrMap);
+
+            wrSetText('wr-status', 'Rainviewer: ' + new Date(frame.time * 1000).toLocaleTimeString());
+            return;
+        }
+
+        if (payload.provider === 'rainbow' && payload.frames && payload.frames.length > 0) {
+            const frame = payload.frames[Math.floor(payload.frames.length / 2)];
+
+            wrRadarLayer = L.tileLayer(
+                frame.url,
+                {
+                    tileSize: 256,
+                    opacity: 0.5,
+                    maxNativeZoom: 12,
+                    maxZoom: 12
+                }
+            ).addTo(wrMap);
+
+            wrSetText('wr-status', 'Rainbow: ' + new Date(frame.time * 1000).toLocaleTimeString());
+            return;
+        }
+
+        wrSetText('wr-status', payload.error || 'Keine Radardaten');
+    }
+
+    function wrHandlePayload(payload) {
+        if (!payload || !payload.type) return;
+
+        if (payload.type === 'init') {
+            wrInitMap(payload.data.config);
+            wrRenderWeather(payload.data.weather);
+            wrRenderRadar(payload.data.radar);
+            return;
+        }
+
+        if (payload.type === 'weather') {
+            wrRenderWeather(payload.data);
+            return;
+        }
+
+        if (payload.type === 'radar') {
+            wrRenderRadar(payload.data);
+            return;
+        }
+    }
+
+    function handleMessage(message) {
+        try {
+            const payload = JSON.parse(message);
+            wrHandlePayload(payload);
+        } catch (e) {
+            wrSetText('wr-status', 'Fehler: ' + e.message);
+        }
+    }
+
+    wrHandlePayload(WR_INITIAL);
+    setTimeout(function() {
+        if (wrMap) wrMap.invalidateSize();
+    }, 250);
+    </script>
+    HTML;
     }
 
     public function UpdateWeather(): void
