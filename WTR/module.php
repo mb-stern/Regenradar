@@ -2,6 +2,7 @@
 
 class Wetterradar extends IPSModuleStrict
 {
+    // TIMER-FIX 2026-07-05: Wetter/Forecast per VM_UPDATE, nur Radar konfigurierbar, Wetter-Fallback intern 60 Minuten.
     // DESIGN-FIX 2026-07-05: Tooltip und Forecast-CSS real angepasst (nicht identische Datei).
     // Patch 2026-07-05: Steuerpanel mit Zurück / Play-Pause / Vor / Zeit-Slider wie im Script integriert.
     public function Create(): void
@@ -21,12 +22,13 @@ class Wetterradar extends IPSModuleStrict
         $this->RegisterPropertyString('RainbowLayer', 'precip');
         $this->RegisterPropertyInteger('RainbowColor', 5);
         $this->RegisterPropertyInteger('RadarRefreshSeconds', 600);
-        $this->RegisterPropertyInteger('WeatherRefreshSeconds', 300);
         $this->RegisterPropertyInteger('Zoom', 7);
         $this->RegisterPropertyString('Theme', 'dark');
         $this->RegisterPropertyString('MapStyle', 'street');
 
         $this->RegisterTimer('RadarUpdate', 0, 'WTR_UpdateRadar($_IPS["TARGET"]);');
+        // Interner Fallback: Wetter/Forecast wird primär per VM_UPDATE aktualisiert.
+        // Dieser Timer bleibt bewusst nicht konfigurierbar.
         $this->RegisterTimer('WeatherUpdate', 0, 'WTR_UpdateWeather($_IPS["TARGET"]);');
 
         // Gemerkte Variablen, auf deren VM_UPDATE die Wetter-/Forecast-Anzeige sofort aktualisiert wird.
@@ -41,10 +43,13 @@ class Wetterradar extends IPSModuleStrict
         parent::ApplyChanges();
 
         $radarSeconds = max(60, $this->ReadPropertyInteger('RadarRefreshSeconds'));
-        $weatherSeconds = max(30, $this->ReadPropertyInteger('WeatherRefreshSeconds'));
 
+        // Radar aktiv abrufen, da Rainviewer/Rainbow keine Symcon-Variable aktualisieren.
         $this->SetTimerInterval('RadarUpdate', $radarSeconds * 1000);
-        $this->SetTimerInterval('WeatherUpdate', $weatherSeconds * 1000);
+
+        // Wetter/Forecast wird sofort über VM_UPDATE der Variablen aktualisiert.
+        // Der interne Fallback läuft stündlich und ist nicht in der Konfiguration sichtbar.
+        $this->SetTimerInterval('WeatherUpdate', 60 * 60 * 1000);
 
         // Wetter- und Forecast-Variablen überwachen: bei VM_UPDATE sofort nur die Wetterdaten neu senden.
         $this->RefreshWeatherWatchRegistrations();
@@ -155,7 +160,6 @@ class Wetterradar extends IPSModuleStrict
                         ],
                         ['type' => 'NumberSpinner', 'name' => 'RainbowColor', 'caption' => 'Rainbow Farbe (0-9)', 'minimum' => 0, 'maximum' => 9],
                         ['type' => 'NumberSpinner', 'name' => 'RadarRefreshSeconds', 'caption' => 'Radar aktualisieren alle Sekunden', 'minimum' => 60],
-                        ['type' => 'NumberSpinner', 'name' => 'WeatherRefreshSeconds', 'caption' => 'Wetter + Forecast aktualisieren alle Sekunden', 'minimum' => 30],
                     ],
                 ],
                 [
@@ -1056,7 +1060,6 @@ HTML;
             'theme' => $this->ReadPropertyString('Theme'),
             'radarMaxZoom' => $radarMaxZoom,
             'radarRefreshSeconds' => max(60, $this->ReadPropertyInteger('RadarRefreshSeconds')),
-            'weatherRefreshSeconds' => max(30, $this->ReadPropertyInteger('WeatherRefreshSeconds')),
             'mapTileUrl' => $mapTileUrl,
             'mapAttribution' => $mapAttribution,
             'mapSubdomains' => $subdomains
