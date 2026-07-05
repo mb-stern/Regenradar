@@ -505,18 +505,43 @@ class Wetterradar extends IPSModuleStrict
         }
 
         @media (max-width: 700px) {
-            #wr-forecast {
+            #wr-legend {
+                display: block;
                 left: 8px;
+                bottom: 22px;
+                max-width: 130px;
+            }
+            #wr-forecast {
+                left: auto;
                 right: 8px;
                 bottom: 22px;
-                justify-content: flex-end;
+                max-width: calc(100% - 160px);
                 overflow-x: auto;
+                overflow-y: hidden;
+                justify-content: flex-start;
+                flex-wrap: nowrap;
             }
-            #wr-legend { display: none; }
+            .wr-forecast-entry {
+                flex: 0 0 auto;
+            }
             #wr-status {
                 left: 8px;
                 bottom: 60px;
                 transform: none;
+                max-width: calc(100% - 16px);
+            }
+        }
+
+        @media (max-width: 430px) {
+            #wr-legend {
+                left: 8px;
+                bottom: 22px;
+                max-width: 130px;
+            }
+            #wr-forecast {
+                left: auto;
+                right: 8px;
+                bottom: 96px;
                 max-width: calc(100% - 16px);
             }
         }
@@ -937,8 +962,10 @@ function wrPlaceControlsOnPhone() {
     function update() {
         const isPhone = window.matchMedia('(max-width: 539px)').matches;
         if (isPhone) {
+            const root = document.getElementById('wetterradar-root');
+            const rootRect = root ? root.getBoundingClientRect() : { top: 0 };
             const rect = current.getBoundingClientRect();
-            const top = rect.top + rect.height + window.scrollY;
+            const top = Math.max(8, rect.bottom - rootRect.top + 3);
             controls.style.top = top + 'px';
         } else {
             controls.style.top = '10px';
