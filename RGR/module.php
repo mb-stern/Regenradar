@@ -1,6 +1,6 @@
 <?php
 
-class Wetterradar extends IPSModuleStrict
+class Regenradar extends IPSModuleStrict
 {
     public function Create(): void
     {
@@ -208,7 +208,7 @@ class Wetterradar extends IPSModuleStrict
                 [
                     'type' => 'Button',
                     'caption' => 'Radar jetzt aktualisieren',
-                    'onClick' => 'WTR_UpdateRadar($id);',
+                    'onClick' => 'RGR_UpdateRadar($id);',
                 ],
                 [
                     'type' => 'Button',
