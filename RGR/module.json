@@ -1,14 +1,14 @@
 {
     "id": "{DB50C4EC-FDBA-B067-9B7F-08D5BA8DF1D1}",
-    "name": "Wetterradar",
+    "name": "Regenradar",
     "type": 3,
     "vendor": "",
     "aliases": [
-        "Wetterradar"
+        "Regenradar"
     ],
     "parentRequirements": [],
     "childRequirements": [],
     "implemented": [],
-    "prefix": "RADAR",
+    "prefix": "RGR",
     "url": "https://github.com/mb-stern/Wetterradar/tree/beta"
 }
