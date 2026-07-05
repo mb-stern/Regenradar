@@ -215,13 +215,21 @@ class Wetterradar extends IPSModuleStrict
             --wr-bg: rgba(40,40,40,0.85);
             --wr-text: #fff;
             --wr-border: #444;
-            --wr-shadow: 0 4px 14px rgba(0,0,0,.25);
-            --wr-radius: 10px;
-            --wr-pad: 8px;
-            --wr-gap: 8px;
-            --wr-fs: 12px;
-            --wr-fs-small: 11px;
-            --wr-fs-tiny: 10px;
+            --k: 1;
+            --wr-fs: calc(12px * var(--k));
+            --wr-fs-small: calc(11px * var(--k));
+            --wr-fs-tiny: calc(10px * var(--k));
+            --wr-pad: calc(8px * var(--k));
+            --wr-gap: calc(8px * var(--k));
+            --wr-radius: calc(10px * var(--k));
+            --wr-shadow: 0 calc(4px * var(--k)) calc(14px * var(--k)) rgba(0,0,0,.25);
+            --wr-icon: calc(20px * var(--k));
+            --wr-forecast-icon: calc(40px * var(--k));
+            --wr-legend-swatch-w: calc(18px * var(--k));
+            --wr-legend-swatch-h: calc(12px * var(--k));
+            --wr-controls-w: calc(220px * var(--k));
+            --wr-range-h: calc(22px * var(--k));
+            --wr-btn-pad-v: calc(8px * var(--k));
         }
         .wr-root.wr-light {
             --wr-bg: rgba(255,255,255,0.90);
@@ -249,22 +257,19 @@ class Wetterradar extends IPSModuleStrict
             left: 50%;
             transform: translateX(-50%);
             display: flex;
-            gap: 14px;
+            gap: calc(var(--wr-gap) + 6px);
             align-items: center;
-            white-space: nowrap;
         }
         #wr-current .wr-value {
             display: flex;
             align-items: center;
-            gap: 6px;
+            gap: calc(6px * var(--k));
+            font-size: var(--wr-fs);
+            white-space: nowrap;
         }
         #wr-current img {
-            width: 20px;
-            height: 20px;
-        }
-        #wr-station-title {
-            font-weight: 700;
-            opacity: .95;
+            width: var(--wr-icon);
+            height: var(--wr-icon);
         }
         #wr-legend {
             bottom: 10px;
@@ -274,12 +279,12 @@ class Wetterradar extends IPSModuleStrict
         #wr-legend .wr-legend-entry {
             display: flex;
             align-items: center;
-            gap: 4px;
-            margin-bottom: 4px;
+            gap: calc(var(--wr-gap) - 4px);
+            margin-bottom: calc(4px * var(--k));
         }
         #wr-legend .wr-legend-color {
-            width: 18px;
-            height: 12px;
+            width: var(--wr-legend-swatch-w);
+            height: var(--wr-legend-swatch-h);
             border: 1px solid var(--wr-border);
         }
         #wr-forecast {
@@ -287,54 +292,60 @@ class Wetterradar extends IPSModuleStrict
             right: 10px;
             display: flex;
             gap: var(--wr-gap);
-            padding: 6px 8px;
+            padding: calc(var(--wr-pad) - 2px) var(--wr-pad);
         }
         #wr-controls {
             top: 10px;
             right: 10px;
-            width: 130px;
+            width: var(--wr-controls-w);
         }
         #wr-controls .wr-row {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            column-gap: 2px;
-            margin-bottom: 6px;
+            display: flex;
+            gap: calc(var(--wr-gap) - 2px);
+            justify-content: space-between;
+            margin-bottom: calc(var(--wr-gap) - 2px);
         }
         #wr-controls button {
+            flex: 1;
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 4px 0;
-            font-size: 12px;
+            padding: var(--wr-btn-pad-v) 0;
+            font-size: var(--wr-fs);
             line-height: 1;
-            border-radius: 2px;
+            gap: 6px;
+            min-width: 0;
+            border-radius: calc(var(--wr-radius) - 2px);
             background: rgba(255,255,255,.08);
             color: var(--wr-text);
             border: 1px solid rgba(255,255,255,.35);
+            -webkit-appearance: none;
             appearance: none;
+            background-image: none;
+            box-shadow: none;
             cursor: pointer;
         }
-        #wr-controls button:hover { filter: brightness(1.12); }
+        #wr-controls button:hover { filter: brightness(1.08); }
         #wr-controls label {
             display: block;
-            font-size: 12px;
-            margin: 4px 0 2px;
+            font-size: var(--wr-fs-small);
+            margin: 6px 0 2px;
         }
         #wr-frame-slider {
             width: 100%;
-            height: 18px;
+            height: var(--wr-range-h);
         }
         #wr-frame-time {
             display: block;
-            margin-top: 4px;
+            margin-top: 6px;
             font-weight: 600;
             text-align: center;
-            font-size: 12px;
+            font-size: var(--wr-fs-small);
             cursor: pointer;
         }
         .wr-ico {
-            width: 12px;
-            height: 12px;
+            width: 14px;
+            height: 14px;
             display: inline-block;
         }
         .wr-ico svg {
@@ -349,8 +360,8 @@ class Wetterradar extends IPSModuleStrict
             cursor: default;
         }
         .wr-forecast-entry img {
-            width: 40px;
-            height: 40px;
+            width: var(--wr-forecast-icon);
+            height: var(--wr-forecast-icon);
         }
         .wr-forecast-entry .wr-day {
             font-weight: 600;
@@ -369,12 +380,12 @@ class Wetterradar extends IPSModuleStrict
             background: var(--wr-bg);
             color: var(--wr-text);
             font-size: var(--wr-fs-small);
-            padding: 6px 8px;
+            padding: calc(var(--wr-pad) - 2px) var(--wr-pad);
             border-radius: var(--wr-radius);
-            box-shadow: 0 8px 18px rgba(0,0,0,.28);
+            box-shadow: 0 calc(8px * var(--k)) calc(18px * var(--k)) rgba(0,0,0,.28);
             white-space: normal;
             line-height: 1.25;
-            max-width: 220px;
+            max-width: calc(220px * var(--k));
             z-index: 2000;
             pointer-events: none;
         }
@@ -384,6 +395,38 @@ class Wetterradar extends IPSModuleStrict
                 width: max-content;
                 min-width: 340px;
                 max-width: 560px;
+            }
+        }
+
+        @media (min-width: 540px) {
+            #wr-controls {
+                width: 130px;
+            }
+            #wr-controls .wr-row {
+                display: grid;
+                grid-template-columns: repeat(3, 1fr);
+                column-gap: 2px;
+                margin-bottom: 6px;
+            }
+            #wr-controls button {
+                border-radius: 2px;
+                padding: 4px 0;
+                font-size: 12px;
+            }
+            #wr-controls label {
+                font-size: 12px;
+                margin: 4px 0 2px;
+            }
+            #wr-frame-slider {
+                height: 18px;
+            }
+            #wr-frame-time {
+                font-size: 12px;
+                margin-top: 4px;
+            }
+            .wr-ico {
+                width: 12px;
+                height: 12px;
             }
         }
 
@@ -401,12 +444,6 @@ class Wetterradar extends IPSModuleStrict
                 text-align: right;
                 flex-wrap: wrap;
                 gap: 6px;
-            }
-            #wr-controls {
-                top: 10px;
-                right: 8px;
-                bottom: auto;
-                width: 130px;
             }
         }
 
@@ -431,20 +468,22 @@ class Wetterradar extends IPSModuleStrict
                 width: 120px;
             }
             #wr-controls .wr-row {
-                display: flex;
                 gap: 4px;
                 margin-bottom: 6px;
+                display: flex;
             }
             #wr-controls button {
                 padding: 6px 0;
                 font-size: 11px;
                 border-radius: 6px;
             }
-            #wr-controls label  {
+            #wr-controls label {
                 font-size: 10px;
                 margin: 4px 0 2px;
             }
-            #wr-frame-slider { height: 16px; }
+            #wr-frame-slider {
+                height: 16px;
+            }
             #wr-frame-time {
                 font-size: 10px;
                 margin-top: 4px;
@@ -472,7 +511,6 @@ class Wetterradar extends IPSModuleStrict
     <div id="map"></div>
 
     <div id="wr-current" class="wr-panel">
-        <div id="wr-station-title">Wetterstation</div>
         <div class="wr-value"><img src="https://raw.githubusercontent.com/basmilius/weather-icons/dev/production/fill/svg/thermometer.svg" alt=""><span id="wr-temp">–</span></div>
         <div class="wr-value"><img src="https://raw.githubusercontent.com/basmilius/weather-icons/dev/production/fill/svg/humidity.svg" alt=""><span id="wr-humidity">–</span></div>
         <div class="wr-value"><img src="https://raw.githubusercontent.com/basmilius/weather-icons/dev/production/fill/svg/wind.svg" alt=""><span id="wr-wind">–</span></div>
@@ -512,6 +550,18 @@ class Wetterradar extends IPSModuleStrict
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
 <script>
+(function wrScaleByTile(){
+    function computeK(){
+        const w = document.documentElement.clientWidth || window.innerWidth || 800;
+        const k = Math.max(0.75, Math.min(1.0, w / 780));
+        const root = document.getElementById('wetterradar-root');
+        if (root) root.style.setProperty('--k', k.toFixed(3));
+        if (window.wrMapRef && window.wrMapRef.invalidateSize) setTimeout(function() { window.wrMapRef.invalidateSize(); }, 0);
+    }
+    computeK();
+    window.addEventListener('resize', computeK);
+})();
+
 const WR_INITIAL = {$initialJson};
 const WR_ICON_URL = "https://raw.githubusercontent.com/basmilius/weather-icons/dev/production/fill/svg/";
 const WR_ICON_MAP = {
@@ -772,6 +822,7 @@ function wrInitMap(config) {
         attributionControl: true,
         maxZoom: config.radarMaxZoom || 7
     }).setView([config.lat, config.lon], config.zoom || 7);
+    window.wrMapRef = wrMap;
 
     const options = {
         maxZoom: config.radarMaxZoom || 7,
@@ -873,11 +924,10 @@ function wrPlaceControlsOnPhone() {
         const isPhone = window.matchMedia('(max-width: 539px)').matches;
         if (isPhone) {
             const rect = current.getBoundingClientRect();
-            controls.style.top = (rect.top + rect.height + 8) + 'px';
-            controls.style.bottom = 'auto';
+            const top = rect.top + rect.height + 8 + window.scrollY;
+            controls.style.top = top + 'px';
         } else {
             controls.style.top = '10px';
-            controls.style.bottom = 'auto';
         }
         if (wrMap && wrMap.invalidateSize) {
             setTimeout(function() { wrMap.invalidateSize(); }, 0);
@@ -886,8 +936,9 @@ function wrPlaceControlsOnPhone() {
 
     update();
     window.addEventListener('resize', update);
-    try { new ResizeObserver(update).observe(document.getElementById('wetterradar-root')); } catch(e) {}
+    try { new ResizeObserver(update).observe(document.documentElement); } catch(e) {}
 }
+
 
 wrSetupControls();
 wrPlaceControlsOnPhone();
