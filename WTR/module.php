@@ -26,8 +26,11 @@ class Wetterradar extends IPSModuleStrict
         $this->RegisterPropertyString('Theme', 'dark');
         $this->RegisterPropertyString('MapStyle', 'street');
 
-        $this->RegisterTimer('RadarUpdate', 0, 'IPS_RequestAction($_IPS["TARGET"], "RefreshRadar", true);');
-        $this->RegisterTimer('WeatherUpdate', 0, 'IPS_RequestAction($_IPS["TARGET"], "RefreshWeather", true);');
+        $this->RegisterTimer('RadarUpdate', 0, 'WTR_UpdateRadar($_IPS["TARGET"]);');
+        $this->RegisterTimer('WeatherUpdate', 0, 'WTR_UpdateWeather($_IPS["TARGET"]);');
+
+        // Gemerkte Variablen, auf deren VM_UPDATE die Wetter-/Forecast-Anzeige sofort aktualisiert wird.
+        $this->RegisterAttributeString('WeatherWatchIDs', '[]');
 
         // HTML-SDK aktivieren. 1 = individuelle Darstellung via HTML-SDK.
         $this->SetVisualizationType(1);
@@ -42,6 +45,28 @@ class Wetterradar extends IPSModuleStrict
 
         $this->SetTimerInterval('RadarUpdate', $radarSeconds * 1000);
         $this->SetTimerInterval('WeatherUpdate', $weatherSeconds * 1000);
+
+        // Wetter- und Forecast-Variablen überwachen: bei VM_UPDATE sofort nur die Wetterdaten neu senden.
+        $this->RefreshWeatherWatchRegistrations();
+
+        // Bei jeder Konfigurationsänderung das komplette HTML neu laden,
+        // damit Theme, Kartenstil, Provider, Zoom, API-Key usw. sofort übernommen werden.
+        $this->ReloadHtml();
+    }
+
+    public function MessageSink($TimeStamp, $SenderID, $Message, $Data): void
+    {
+        if ($Message !== VM_UPDATE) {
+            return;
+        }
+
+        $watchIDs = json_decode($this->ReadAttributeString('WeatherWatchIDs'), true);
+        if (!is_array($watchIDs) || !in_array((int) $SenderID, array_map('intval', $watchIDs), true)) {
+            return;
+        }
+
+        // Variable wurde geändert: nur Wetter + Forecast aktualisieren, kein HTML-Reload.
+        $this->UpdateWeather();
     }
 
     public function RequestAction(string $Ident, mixed $Value): void
@@ -984,11 +1009,13 @@ HTML;
 
     public function UpdateWeather(): void
     {
+        $this->SendDebug('UpdateWeather', 'Wetter-Aktualisierung gestartet', 0);
         $this->SendVisualizationMessage('weather', $this->BuildWeatherPayload());
     }
 
     public function UpdateRadar(): void
     {
+        $this->SendDebug('UpdateRadar', 'Radar-Aktualisierung gestartet', 0);
         $this->SendVisualizationMessage('radar', $this->BuildRadarPayload());
     }
 
@@ -1034,6 +1061,75 @@ HTML;
             'mapAttribution' => $mapAttribution,
             'mapSubdomains' => $subdomains
         ];
+    }
+
+    private function RefreshWeatherWatchRegistrations(): void
+    {
+        $oldIDs = json_decode($this->ReadAttributeString('WeatherWatchIDs'), true);
+        if (!is_array($oldIDs)) {
+            $oldIDs = [];
+        }
+
+        foreach (array_unique(array_map('intval', $oldIDs)) as $id) {
+            if ($id > 0) {
+                $this->UnregisterMessage($id, VM_UPDATE);
+            }
+        }
+
+        $newIDs = $this->CollectWeatherWatchIDs();
+        foreach ($newIDs as $id) {
+            $this->RegisterMessage($id, VM_UPDATE);
+        }
+
+        $this->WriteAttributeString('WeatherWatchIDs', json_encode($newIDs, JSON_UNESCAPED_SLASHES));
+    }
+
+    private function CollectWeatherWatchIDs(): array
+    {
+        $owmInstID = $this->ReadPropertyInteger('OpenWeatherInstanceID');
+        $ids = [];
+
+        // Aktuelle Werte: eigene Variablen oder Fallback aus OpenWeather.
+        $ids[] = $this->ResolveVariableID('TemperatureID', 'Temperature', $owmInstID);
+        $ids[] = $this->ResolveVariableID('HumidityID', 'Humidity', $owmInstID);
+        $ids[] = $this->ResolveVariableID('WindSpeedID', 'WindSpeed', $owmInstID);
+        $ids[] = $this->ResolveVariableID('Rain1hID', 'Rain_1h', $owmInstID);
+        $ids[] = $this->GetObjectIDByIdentSafe('Cloudiness', $owmInstID);
+
+        // Forecast-Werte aus OpenWeather überwachen.
+        if ($owmInstID > 0 && @IPS_ObjectExists($owmInstID)) {
+            $count = (int) @IPS_GetProperty($owmInstID, 'daily_forecast_count');
+            if ($count <= 0) {
+                $count = 5;
+            }
+
+            $forecastIdents = [
+                'DailyForecastBegin',
+                'DailyForecastTemperatureMin',
+                'DailyForecastTemperatureMax',
+                'DailyForecastWindSpeed',
+                'DailyForecastRain',
+                'DailyForecastSnow',
+                'DailyForecastConditionIcon',
+                'DailyForecastConditions',
+                'DailyForecastHumidity',
+                'DailyForecastCloudiness'
+            ];
+
+            for ($i = 0; $i < $count; $i++) {
+                $post = '_' . sprintf('%02d', $i);
+                foreach ($forecastIdents as $identPrefix) {
+                    $ids[] = $this->GetObjectIDByIdentSafe($identPrefix . $post, $owmInstID);
+                }
+            }
+        }
+
+        $ids = array_values(array_unique(array_filter(array_map('intval', $ids), static function (int $id): bool {
+            return $id > 0;
+        })));
+
+        sort($ids);
+        return $ids;
     }
 
     private function BuildWeatherPayload(): array
