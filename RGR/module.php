@@ -11,8 +11,6 @@ class Regenradar extends IPSModuleStrict
         $this->RegisterPropertyInteger('HumidityID', 0);
         $this->RegisterPropertyInteger('WindSpeedID', 0);
         $this->RegisterPropertyInteger('Rain1hID', 0);
-        $this->RegisterPropertyFloat('Latitude', 47.3769);
-        $this->RegisterPropertyFloat('Longitude', 8.5417);
 
         $this->RegisterPropertyString('RadarProvider', 'rainviewer');
         $this->RegisterPropertyString('RainbowApiKey', '');
@@ -67,6 +65,12 @@ class Regenradar extends IPSModuleStrict
         if (!is_array($watchIDs) || !in_array((int) $SenderID, array_map('intval', $watchIDs), true)) {
             return;
         }
+
+        $this->SendDebug(
+            'MessageSink',
+            'VM_UPDATE von Variable ID ' . $SenderID . ' erkannt, Wetterdaten werden aktualisiert.',
+            0
+        );
 
         // Variable wurde geändert: nur Wetter + Forecast aktualisieren, kein HTML-Reload.
         $this->UpdateWeather();
@@ -1181,7 +1185,12 @@ HTML;
 
     public function UpdateRadar(): void
     {
-        $this->SendDebug('UpdateRadar', 'Radar-Aktualisierung gestartet', 0);
+        $this->SendDebug(
+            'UpdateRadar',
+            'Radar-Aktualisierung gestartet. Provider=' . $this->ReadPropertyString('RadarProvider'),
+            0
+        );
+
         $this->SendVisualizationMessage('radar', $this->BuildRadarPayload());
     }
 
@@ -1422,6 +1431,11 @@ HTML;
         $data = json_decode($json, true);
 
         if (!is_array($data) || !isset($data['host']) || !isset($data['radar']['past']) || !is_array($data['radar']['past'])) {
+            $this->SendDebug(
+                'BuildRainviewerPayload',
+                'RainViewer API liefert ungültige oder unvollständige Daten.',
+                0
+            );
             return [
                 'provider' => 'rainviewer',
                 'host' => '',
@@ -1429,6 +1443,13 @@ HTML;
                 'error' => 'Rainviewer-Daten ungültig'
             ];
         }
+
+        $this->SendDebug(
+            'BuildRainviewerPayload',
+            'RainViewer Frames geladen: ' . count($data['radar']['past']) .
+            ', Host=' . (string) $data['host'],
+            0
+        );
 
         return [
             'provider' => 'rainviewer',
@@ -1445,6 +1466,11 @@ HTML;
         $color = min(max(0, $this->ReadPropertyInteger('RainbowColor')), 9);
 
         if ($apiKey === '') {
+            $this->SendDebug(
+                'BuildRainbowPayload',
+                'Rainbow Snapshot ungültig oder API-Antwort fehlerhaft.',
+                0
+            );
             return [
                 'provider' => 'rainbow',
                 'frames' => [],
@@ -1458,6 +1484,12 @@ HTML;
         $snapshot = (is_array($data) && isset($data['snapshot'])) ? (int) $data['snapshot'] : 0;
 
         if ($snapshot <= 0) {
+            $this->SendDebug(
+                'BuildRainbowPayload',
+                'Rainbow Snapshot ungültig oder API-Antwort fehlerhaft.',
+                0
+            );
+
             return [
                 'provider' => 'rainbow',
                 'frames' => [],
@@ -1483,6 +1515,12 @@ HTML;
                 'url' => $this->BuildRainbowTileUrl($layer, $snapshot, $step, $color, $apiKey)
             ];
         }
+
+        $this->SendDebug(
+            'BuildRainbowPayload',
+            'Rainbow Snapshot=' . $snapshot . ', Layer=' . $layer . ', Color=' . $color . ', Frames=' . count($frames),
+            0
+        );
 
         return [
             'provider' => 'rainbow',
@@ -1562,7 +1600,13 @@ HTML;
             }
         }
 
-        return [$this->ReadPropertyFloat('Latitude'), $this->ReadPropertyFloat('Longitude')];
+        $this->SendDebug(
+            'GetLocation',
+            'Keine gültigen Koordinaten in der OpenWeatherOneCall-Instanz gefunden. OpenWeatherInstanceID=' . $owmInstID,
+            0
+        );
+
+        return [0.0, 0.0];
     }
 
     private function GetMapStyle(): array
