@@ -506,25 +506,28 @@ class Wetterradar extends IPSModuleStrict
             }
         }
 
-        /* Nur ganz am Schluss / sehr kleine Handybreite: Vorhersage rechts nochmals kompakter. */
+        /* Nur ganz am Schluss / sehr kleine Handybreite: Vorhersage rechts moderat kompakter. */
         @media (max-width: 430px) {
             #wr-forecast {
-                max-width: min(132px, calc(100% - 106px));
-                padding: 2px 3px;
-                gap: 1px;
+                max-width: min(165px, calc(100% - 118px));
+                padding: 4px 5px;
+                gap: 3px;
             }
             .wr-forecast-entry {
-                flex: 0 0 20px;
-                min-width: 20px;
+                flex: 0 0 25px;
+                min-width: 25px;
             }
             .wr-forecast-entry img {
-                width: 16px;
-                height: 16px;
+                width: 21px;
+                height: 21px;
             }
-            .wr-forecast-entry .wr-day,
+            .wr-forecast-entry .wr-day {
+                font-size: 7.5px;
+                line-height: 1.1;
+            }
             .wr-forecast-entry .wr-temp {
-                font-size: 6px;
-                line-height: 1.05;
+                font-size: 7px;
+                line-height: 1.1;
             }
         }
 
