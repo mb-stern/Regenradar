@@ -756,109 +756,23 @@ function wrWrapFrameIndex(index) {
     return index;
 }
 
-
-function wrDbzToRgba(red, green, blue, alpha) {
-    if (!alpha || red <= 0) return [0, 0, 0, 0];
-
-    // Rainbow dbz_u8 und RainViewer Black/White dBZ: roter Kanal enthält dBZ + 32,
-    // höchstes Bit kann Schnee markieren. Für die gemeinsame Darstellung nutzen wir
-    // denselben Intensitätswert und färben danach selbst ein.
-    const snow = (red & 128) !== 0;
-    const code = red & 127;
-    const dbz = code - 32;
-
-    if (dbz < 5) return [0, 0, 0, 0];
-
-    // Gemeinsame, feste Intensitätsskala für beide Provider.
-    // Bewusst als Stufen: schnell, stabil und gleiche Legende wie unten.
-    if (dbz < 15) return snow ? [185, 220, 255, 115] : [110, 190, 255, 105];
-    if (dbz < 25) return snow ? [150, 200, 255, 140] : [50, 150, 255, 135];
-    if (dbz < 35) return snow ? [115, 170, 245, 165] : [0, 220, 120, 155];
-    if (dbz < 45) return snow ? [90, 145, 235, 190] : [255, 235, 0, 185];
-    if (dbz < 55) return snow ? [70, 115, 220, 215] : [255, 135, 0, 215];
-    if (dbz < 65) return snow ? [55, 90, 205, 235] : [235, 20, 20, 235];
-    return snow ? [45, 70, 190, 245] : [180, 0, 180, 245];
-}
-
-function wrBuildDbzCanvasLayer(urlTemplate, options) {
-    const layerOptions = Object.assign({}, options || {});
-    const opacity = Number(layerOptions.opacity || 0.5);
-    delete layerOptions.opacity;
-
-    const DbzLayer = L.GridLayer.extend({
-        createTile: function(coords, done) {
-            const tile = document.createElement('canvas');
-            const size = this.getTileSize();
-            tile.width = size.x;
-            tile.height = size.y;
-            tile.style.opacity = String(opacity);
-
-            const ctx = tile.getContext('2d', { willReadFrequently: true });
-            const img = new Image();
-            img.crossOrigin = 'anonymous';
-
-            img.onload = function() {
-                try {
-                    ctx.clearRect(0, 0, size.x, size.y);
-                    ctx.drawImage(img, 0, 0, size.x, size.y);
-                    const imageData = ctx.getImageData(0, 0, size.x, size.y);
-                    const data = imageData.data;
-
-                    for (let i = 0; i < data.length; i += 4) {
-                        const c = wrDbzToRgba(data[i], data[i + 1], data[i + 2], data[i + 3]);
-                        data[i] = c[0];
-                        data[i + 1] = c[1];
-                        data[i + 2] = c[2];
-                        data[i + 3] = c[3];
-                    }
-
-                    ctx.putImageData(imageData, 0, 0);
-                    done(null, tile);
-                } catch (e) {
-                    // Falls ein Provider CORS für Canvas blockiert, bleibt das Tile transparent,
-                    // damit die Karte nicht mit falschen Rohdaten angezeigt wird.
-                    ctx.clearRect(0, 0, size.x, size.y);
-                    done(e, tile);
-                }
-            };
-
-            img.onerror = function() {
-                done(null, tile);
-            };
-
-            img.src = L.Util.template(urlTemplate, Object.assign({}, coords, {
-                s: this._getSubdomain ? this._getSubdomain(coords) : ''
-            }));
-
-            return tile;
-        }
-    });
-
-    return new DbzLayer(layerOptions);
-}
-
 function wrBuildRadarLayer(frame) {
     if (!wrRadarPayload || !frame) return null;
 
     if (wrRadarPayload.provider === 'rainviewer') {
         const host = wrRadarPayload.host || '';
         const tileSize = window.devicePixelRatio >= 2 ? 512 : 256;
-        const url = host + frame.path + '/' + tileSize + '/{z}/{x}/{y}/0/0_0.png';
-        return wrBuildDbzCanvasLayer(url, {
-            tileSize: 256,
-            maxNativeZoom: 7,
-            maxZoom: 7,
-            opacity: 0.5
-        });
+        return L.tileLayer(
+            host + frame.path + '/' + tileSize + '/{z}/{x}/{y}/2/1_1.png',
+            { tileSize: 256, opacity: 0, maxNativeZoom: 7, maxZoom: 7 }
+        );
     }
 
     if (wrRadarPayload.provider === 'rainbow') {
-        return wrBuildDbzCanvasLayer(frame.url, {
-            tileSize: 256,
-            maxNativeZoom: 12,
-            maxZoom: 12,
-            opacity: 0.5
-        });
+        return L.tileLayer(
+            frame.url,
+            { tileSize: 256, opacity: 0, maxNativeZoom: 12, maxZoom: 12 }
+        );
     }
 
     return null;
@@ -893,17 +807,6 @@ function wrPruneRadarLayerCache(validKeys) {
     }
 }
 
-
-function wrSetLayerOpacity(layer, opacity) {
-    if (!layer) return;
-    if (typeof layer.setOpacity === 'function') {
-        layer.setOpacity(opacity);
-        return;
-    }
-    const container = layer.getContainer ? layer.getContainer() : null;
-    if (container) container.style.opacity = String(opacity);
-}
-
 function wrShowFrame(index) {
     if (!wrMap || !wrFrames.length) return;
 
@@ -913,7 +816,7 @@ function wrShowFrame(index) {
     const slider = document.getElementById('wr-frame-slider');
 
     if (wrRadarLayer && wrRadarLayer !== wrRadarLayerCache[cacheKey]) {
-        try { wrSetLayerOpacity(wrRadarLayer, 0); } catch(e) {}
+        try { wrRadarLayer.setOpacity(0); } catch(e) {}
     }
 
     let layer = wrRadarLayerCache[cacheKey] || null;
@@ -924,7 +827,7 @@ function wrShowFrame(index) {
         layer.addTo(wrMap);
     }
 
-    wrSetLayerOpacity(layer, 1);
+    layer.setOpacity(0.5);
     wrRadarLayer = layer;
     wrFrameIndex = index;
 
@@ -1379,21 +1282,44 @@ HTML;
 
     private function BuildRadarLegendPayload(): array
     {
-        // Gemeinsame Test-Legende für RainViewer und Rainbow.
-        // Beide Provider werden im Browser aus dBZ-Rohwerten mit derselben Palette eingefärbt.
+        $provider = $this->ReadPropertyString('RadarProvider');
+
+        if ($provider === 'rainbow') {
+            $color = min(max(0, $this->ReadPropertyInteger('RainbowColor')), 9);
+            $palettes = [
+                0 => ['name' => 'Rainbow', 'image' => 'rainbow_rain.png'],
+                1 => ['name' => 'TWC', 'image' => 'twc_rain.png'],
+                2 => ['name' => 'Dark Sky', 'image' => 'dark_sky_rain.png'],
+                3 => ['name' => 'Meteored', 'image' => 'meteored_rain.png'],
+                4 => ['name' => 'NEXRAD', 'image' => 'nexrad_rain.png'],
+                5 => ['name' => 'Rainviewer', 'image' => 'rainviewer_rain.png'],
+                6 => ['name' => 'SELEX-IS', 'image' => 'selex_rain.png'],
+                7 => ['name' => 'TITAN', 'image' => 'titan_rain.png'],
+                8 => ['name' => 'Universal Blue', 'image' => 'universal_blue_rain.png'],
+                9 => ['name' => 'Rainviewer TWC', 'image' => 'twc_rv_rain.png'],
+            ];
+
+            $palette = $palettes[$color] ?? $palettes[0];
+
+            return [
+                'type' => 'image',
+                'title' => 'Rainbow ' . $color . ' - ' . $palette['name'],
+                'image' => 'https://doc.rainbow.ai/images/palletes/' . $palette['image'],
+                'note' => 'offizielle Rainbow-Rain-Palette'
+            ];
+        }
+
+        // RainViewer: keine Auswahl mehr; Standard-Legende passend zur festen Tile-URL /2/1_1.png.
         return [
             'type' => 'entries',
-            'title' => 'dBZ einheitlich',
+            'title' => 'RainViewer Standard',
             'entries' => [
-                ['color' => 'rgba(110,190,255,0.75)', 'label' => '5–15 dBZ sehr leicht'],
-                ['color' => 'rgba(50,150,255,0.80)', 'label' => '15–25 dBZ leicht'],
-                ['color' => 'rgba(0,220,120,0.85)', 'label' => '25–35 dBZ mäßig'],
-                ['color' => 'rgba(255,235,0,0.90)', 'label' => '35–45 dBZ kräftig'],
-                ['color' => 'rgba(255,135,0,0.95)', 'label' => '45–55 dBZ stark'],
-                ['color' => 'rgba(235,20,20,0.98)', 'label' => '55–65 dBZ sehr stark'],
-                ['color' => 'rgba(180,0,180,1)', 'label' => '>65 dBZ extrem'],
-            ],
-            'note' => 'Test: Rainbow dbz_u8 + RainViewer Black/White dBZ, Einfärbung im Browser'
+                ['color' => '#b3d9ff', 'label' => 'Sehr leicht'],
+                ['color' => '#3399ff', 'label' => 'Leicht'],
+                ['color' => '#0066ff', 'label' => 'Mäßig'],
+                ['color' => '#cc3300', 'label' => 'Stark'],
+                ['color' => '#990099', 'label' => 'Extrem'],
+            ]
         ];
     }
 
@@ -1549,7 +1475,7 @@ HTML;
 
     private function BuildRainbowTileUrl(string $layer, int $snapshot, int $forecastTime, int $color, string $apiKey): string
     {
-        return 'https://api.rainbow.ai/tiles/v1/' . rawurlencode($layer) . '/' . $snapshot . '/' . $forecastTime . '/{z}/{x}/{y}?color=dbz_u8&token=' . rawurlencode($apiKey);
+        return 'https://api.rainbow.ai/tiles/v1/' . rawurlencode($layer) . '/' . $snapshot . '/' . $forecastTime . '/{z}/{x}/{y}?color=' . $color . '&token=' . rawurlencode($apiKey);
     }
 
     private function ResolveVariableID(string $propertyName, string $fallbackIdent, int $fallbackParentID): int
