@@ -18,6 +18,7 @@ class Regenradar extends IPSModuleStrict
         $this->RegisterPropertyInteger('RainbowColor', 5);
         $this->RegisterPropertyInteger('RadarRefreshSeconds', 600);
         $this->RegisterPropertyBoolean('EnableAutoplay', false);
+        $this->RegisterPropertyBoolean('ShowTileDebug', false);
         $this->RegisterPropertyInteger('Zoom', 7);
         $this->RegisterPropertyString('Theme', 'dark');
         $this->RegisterPropertyString('MapStyle', 'street');
@@ -180,6 +181,7 @@ class Regenradar extends IPSModuleStrict
                     ],
                         ['type' => 'NumberSpinner', 'name' => 'RadarRefreshSeconds', 'caption' => 'Radar aktualisieren alle Sekunden', 'minimum' => 60],
                         ['type' => 'CheckBox', 'name' => 'EnableAutoplay', 'caption' => 'Autoplay aktivieren'],
+                        ['type' => 'CheckBox', 'name' => 'ShowTileDebug', 'caption' => 'Tile-Debug im HTML anzeigen'],
                     ],
                 ],
                 [
@@ -479,6 +481,23 @@ class Regenradar extends IPSModuleStrict
         #wr-status {
             display: none;
         }
+        #wr-tile-debug {
+            top: 10px;
+            left: 58px;
+            min-width: 170px;
+            max-width: 240px;
+            display: none;
+            font-size: var(--wr-fs-small);
+            line-height: 1.25;
+            white-space: normal;
+        }
+        #wr-tile-debug .wr-debug-title {
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+        #wr-tile-debug .wr-debug-line {
+            opacity: .95;
+        }
         /* Tooltip 1:1 wie im Script: gleiche Variablen, gleiche Abstände, gleicher Schatten. */
         .tooltip {
             position: fixed;
@@ -553,6 +572,13 @@ class Regenradar extends IPSModuleStrict
         }
 
         @media (max-width: 539px) {
+            #wr-tile-debug {
+                left: 54px;
+                top: 8px;
+                min-width: 150px;
+                max-width: calc(100vw - 190px);
+                font-size: 10px;
+            }
             #wr-current {
                 top: 8px;
                 left: auto;
@@ -626,6 +652,8 @@ class Regenradar extends IPSModuleStrict
 
     <div id="map"></div>
 
+    <div id="wr-tile-debug" class="wr-panel"></div>
+
     <div id="wr-current" class="wr-panel">
         <div class="wr-value"><img src="https://raw.githubusercontent.com/basmilius/weather-icons/dev/production/fill/svg/thermometer.svg" alt=""><span id="wr-temp">–</span></div>
         <div class="wr-value"><img src="https://raw.githubusercontent.com/basmilius/weather-icons/dev/production/fill/svg/humidity.svg" alt=""><span id="wr-humidity">–</span></div>
@@ -695,6 +723,7 @@ let wrFrames = [];
 let wrFrameIndex = 0;
 let wrAnimationTimer = null;
 let wrRadarLayerCache = {};
+let wrTileDebugStats = { frame: '-', provider: '-', started: 0, loaded: 0, errors: 0, complete: false };
 const WR_ANIMATION_DELAY_MS = 1000;
 const wrPlaySvg = '<svg viewBox="0 0 24 24"><path d="M8 5l12 7-12 7V5z"/></svg>';
 const wrPauseSvg = '<svg viewBox="0 0 24 24"><path d="M8 5h3v14H8V5zm5 0h3v14h-3V5z"/></svg>';
@@ -779,26 +808,90 @@ function wrWrapFrameIndex(index) {
     return index;
 }
 
+
+function wrSetTileDebugVisible() {
+    const box = document.getElementById('wr-tile-debug');
+    if (!box) return;
+    box.style.display = (wrConfig && wrConfig.showTileDebug) ? 'block' : 'none';
+}
+
+function wrUpdateTileDebug() {
+    const box = document.getElementById('wr-tile-debug');
+    if (!box) return;
+
+    wrSetTileDebugVisible();
+    if (!wrConfig || !wrConfig.showTileDebug) return;
+
+    box.innerHTML =
+        '<div class="wr-debug-title">Tile-Debug</div>' +
+        '<div class="wr-debug-line">Provider: ' + wrEscapeHtml(wrTileDebugStats.provider) + '</div>' +
+        '<div class="wr-debug-line">Frame: ' + wrEscapeHtml(wrTileDebugStats.frame) + '</div>' +
+        '<div class="wr-debug-line">Start: ' + wrTileDebugStats.started + '</div>' +
+        '<div class="wr-debug-line">Geladen: ' + wrTileDebugStats.loaded + '</div>' +
+        '<div class="wr-debug-line">Fehler: ' + wrTileDebugStats.errors + '</div>' +
+        '<div class="wr-debug-line">Status: ' + (wrTileDebugStats.complete ? 'vollständig' : 'lädt') + '</div>';
+}
+
+function wrAttachTileDebug(layer, frame) {
+    if (!layer || !frame) return layer;
+
+    const frameLabel = frame.time ? new Date(Number(frame.time) * 1000).toLocaleTimeString() : '-';
+    wrTileDebugStats = {
+        frame: frameLabel,
+        provider: wrRadarPayload && wrRadarPayload.provider ? wrRadarPayload.provider : '-',
+        started: 0,
+        loaded: 0,
+        errors: 0,
+        complete: false
+    };
+    wrUpdateTileDebug();
+
+    layer.on('tileloadstart', function() {
+        wrTileDebugStats.started++;
+        wrTileDebugStats.complete = false;
+        wrUpdateTileDebug();
+    });
+
+    layer.on('tileload', function() {
+        wrTileDebugStats.loaded++;
+        wrUpdateTileDebug();
+    });
+
+    layer.on('tileerror', function() {
+        wrTileDebugStats.errors++;
+        wrUpdateTileDebug();
+    });
+
+    layer.on('load', function() {
+        wrTileDebugStats.complete = true;
+        wrUpdateTileDebug();
+    });
+
+    return layer;
+}
+
 function wrBuildRadarLayer(frame) {
     if (!wrRadarPayload || !frame) return null;
+
+    let layer = null;
 
     if (wrRadarPayload.provider === 'rainviewer') {
         const host = wrRadarPayload.host || '';
         const tileSize = window.devicePixelRatio >= 2 ? 512 : 256;
-        return L.tileLayer(
+        layer = L.tileLayer(
             host + frame.path + '/' + tileSize + '/{z}/{x}/{y}/2/1_1.png',
             { tileSize: 256, opacity: 0, maxNativeZoom: 7, maxZoom: 7 }
         );
     }
 
     if (wrRadarPayload.provider === 'rainbow') {
-        return L.tileLayer(
+        layer = L.tileLayer(
             frame.url,
             { tileSize: 256, opacity: 0, maxNativeZoom: 12, maxZoom: 12 }
         );
     }
 
-    return null;
+    return wrAttachTileDebug(layer, frame);
 }
 
 function wrRadarCacheKey(frame) {
@@ -843,6 +936,18 @@ function wrShowFrame(index) {
     }
 
     let layer = wrRadarLayerCache[cacheKey] || null;
+    if (layer && wrConfig && wrConfig.showTileDebug) {
+        const frameLabel = frame.time ? new Date(Number(frame.time) * 1000).toLocaleTimeString() : '-';
+        wrTileDebugStats = {
+            frame: frameLabel + ' (Cache)',
+            provider: wrRadarPayload && wrRadarPayload.provider ? wrRadarPayload.provider : '-',
+            started: 0,
+            loaded: 0,
+            errors: 0,
+            complete: true
+        };
+        wrUpdateTileDebug();
+    }
     if (!layer) {
         layer = wrBuildRadarLayer(frame);
         if (!layer) return;
@@ -1018,6 +1123,7 @@ function wrInitMap(config) {
     if (!config || wrMap) return;
 
     wrRenderLegend(config.legend || null);
+    wrSetTileDebugVisible();
 
     const root = document.getElementById('wetterradar-root');
     if (root && config.theme === 'light') {
@@ -1097,6 +1203,7 @@ function wrHandlePayload(payload) {
     if (payload.data && payload.data.config) {
         wrConfig = payload.data.config;
         wrRenderLegend(wrConfig.legend || null);
+        wrSetTileDebugVisible();
     }
 
     if (payload.type === 'reload') {
@@ -1232,6 +1339,7 @@ HTML;
             'radarMaxZoom' => $radarMaxZoom,
             'radarRefreshSeconds' => max(60, $this->ReadPropertyInteger('RadarRefreshSeconds')),
             'enableAutoplay' => $this->ReadPropertyBoolean('EnableAutoplay'),
+            'showTileDebug' => $this->ReadPropertyBoolean('ShowTileDebug'),
             'legend' => $this->BuildRadarLegendPayload(),
             'mapTileUrl' => $mapTileUrl,
             'mapAttribution' => $mapAttribution,
