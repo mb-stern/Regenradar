@@ -723,8 +723,7 @@ let wrFrames = [];
 let wrFrameIndex = 0;
 let wrAnimationTimer = null;
 let wrRadarLayerCache = {};
-let wrTileDebugStats = { frame: '-', provider: '-', started: 0, loaded: 0, errors: 0, fromNetwork: 0, fromHttpCache: 0, unknown: 0, transferBytes: 0, complete: false };
-const wrTileStartTimes = new WeakMap();
+let wrTileDebugStats = { frame: '-', provider: '-', started: 0, loaded: 0, errors: 0, complete: false };
 const WR_ANIMATION_DELAY_MS = 1000;
 const wrPlaySvg = '<svg viewBox="0 0 24 24"><path d="M8 5l12 7-12 7V5z"/></svg>';
 const wrPauseSvg = '<svg viewBox="0 0 24 24"><path d="M8 5h3v14H8V5zm5 0h3v14h-3V5z"/></svg>';
@@ -829,52 +828,8 @@ function wrUpdateTileDebug() {
         '<div class="wr-debug-line">Frame: ' + wrEscapeHtml(wrTileDebugStats.frame) + '</div>' +
         '<div class="wr-debug-line">Start: ' + wrTileDebugStats.started + '</div>' +
         '<div class="wr-debug-line">Geladen: ' + wrTileDebugStats.loaded + '</div>' +
-        '<div class="wr-debug-line">HTTP-Cache: ' + wrTileDebugStats.fromHttpCache + '</div>' +
-        '<div class="wr-debug-line">Netzwerk: ' + wrTileDebugStats.fromNetwork + '</div>' +
-        '<div class="wr-debug-line">Unklar: ' + wrTileDebugStats.unknown + '</div>' +
-        '<div class="wr-debug-line">Transfer: ' + wrFormatBytes(wrTileDebugStats.transferBytes) + '</div>' +
         '<div class="wr-debug-line">Fehler: ' + wrTileDebugStats.errors + '</div>' +
         '<div class="wr-debug-line">Status: ' + (wrTileDebugStats.complete ? 'vollständig' : 'lädt') + '</div>';
-}
-
-function wrFormatBytes(bytes) {
-    const n = Number(bytes || 0);
-    if (!Number.isFinite(n) || n <= 0) return '0 B';
-    if (n < 1024) return Math.round(n) + ' B';
-    if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
-    return (n / (1024 * 1024)).toFixed(2) + ' MB';
-}
-
-function wrLatestPerformanceEntry(url) {
-    if (!url || !window.performance || !performance.getEntriesByName) return null;
-    const entries = performance.getEntriesByName(url, 'resource');
-    if (!entries || !entries.length) return null;
-    return entries[entries.length - 1];
-}
-
-function wrClassifyTileTransfer(tile) {
-    const src = tile && (tile.currentSrc || tile.src) ? (tile.currentSrc || tile.src) : '';
-    const entry = wrLatestPerformanceEntry(src);
-
-    if (!entry) {
-        return { source: 'unknown', bytes: 0 };
-    }
-
-    const transferSize = Number(entry.transferSize || 0);
-    const encodedBodySize = Number(entry.encodedBodySize || 0);
-    const decodedBodySize = Number(entry.decodedBodySize || 0);
-
-    if (transferSize > 0) {
-        return { source: 'network', bytes: transferSize };
-    }
-
-    // transferSize=0 und BodySize>0 ist bei Resource Timing typischerweise HTTP-/Memory-Cache
-    // oder ein 304/Cache-Treffer ohne Bodytransfer. Für unsere Auswertung zählt das als Cache.
-    if (encodedBodySize > 0 || decodedBodySize > 0) {
-        return { source: 'cache', bytes: 0 };
-    }
-
-    return { source: 'unknown', bytes: 0 };
 }
 
 function wrAttachTileDebug(layer, frame) {
@@ -887,48 +842,23 @@ function wrAttachTileDebug(layer, frame) {
         started: 0,
         loaded: 0,
         errors: 0,
-        fromNetwork: 0,
-        fromHttpCache: 0,
-        unknown: 0,
-        transferBytes: 0,
         complete: false
     };
     wrUpdateTileDebug();
 
-    layer.on('tileloadstart', function(e) {
+    layer.on('tileloadstart', function() {
         wrTileDebugStats.started++;
         wrTileDebugStats.complete = false;
-        if (e && e.tile) {
-            wrTileStartTimes.set(e.tile, performance && performance.now ? performance.now() : Date.now());
-        }
         wrUpdateTileDebug();
     });
 
-    layer.on('tileload', function(e) {
+    layer.on('tileload', function() {
         wrTileDebugStats.loaded++;
-
-        // Performance-Eintrag oft erst direkt nach dem load-Event verfügbar.
-        setTimeout(function() {
-            const result = wrClassifyTileTransfer(e && e.tile ? e.tile : null);
-            if (result.source === 'network') {
-                wrTileDebugStats.fromNetwork++;
-                wrTileDebugStats.transferBytes += result.bytes;
-            } else if (result.source === 'cache') {
-                wrTileDebugStats.fromHttpCache++;
-            } else {
-                wrTileDebugStats.unknown++;
-            }
-            wrUpdateTileDebug();
-        }, 0);
-
         wrUpdateTileDebug();
     });
 
-    layer.on('tileerror', function(e) {
+    layer.on('tileerror', function() {
         wrTileDebugStats.errors++;
-        if (e && e.tile) {
-            wrTileStartTimes.delete(e.tile);
-        }
         wrUpdateTileDebug();
     });
 
@@ -1014,10 +944,6 @@ function wrShowFrame(index) {
             started: 0,
             loaded: 0,
             errors: 0,
-            fromNetwork: 0,
-            fromHttpCache: 0,
-            unknown: 0,
-            transferBytes: 0,
             complete: true
         };
         wrUpdateTileDebug();
