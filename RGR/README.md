@@ -135,6 +135,13 @@ Feedback, Verbesserungsvorschläge und Pull Requests sind jederzeit willkommen.
 
 ---
 
+## Versionen
+
+**Version 1.0 (11.07.2026)**
+* Inititale Version.
+
+---
+
 ## Lizenz
 
 MIT License
