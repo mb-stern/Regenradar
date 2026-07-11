@@ -2,6 +2,7 @@
 
 class Regenradar extends IPSModuleStrict
 {
+    // Tile-Debug Mobile-Layout Fix v3 – sofortiger Radarabruf beim Öffnen
     public function Create(): void
     {
         parent::Create();
@@ -11,8 +12,6 @@ class Regenradar extends IPSModuleStrict
         $this->RegisterPropertyInteger('HumidityID', 0);
         $this->RegisterPropertyInteger('WindSpeedID', 0);
         $this->RegisterPropertyInteger('Rain1hID', 0);
-        $this->RegisterPropertyFloat('Latitude', 47.3769);
-        $this->RegisterPropertyFloat('Longitude', 8.5417);
 
         $this->RegisterPropertyString('RadarProvider', 'rainviewer');
         $this->RegisterPropertyString('RainbowApiKey', '');
@@ -20,14 +19,10 @@ class Regenradar extends IPSModuleStrict
         $this->RegisterPropertyInteger('RainbowColor', 5);
         $this->RegisterPropertyInteger('RadarRefreshSeconds', 600);
         $this->RegisterPropertyBoolean('EnableAutoplay', false);
+        $this->RegisterPropertyBoolean('ShowTileDebug', false);
         $this->RegisterPropertyInteger('Zoom', 7);
         $this->RegisterPropertyString('Theme', 'dark');
         $this->RegisterPropertyString('MapStyle', 'street');
-
-        $this->RegisterTimer('RadarUpdate', 0, 'WTR_UpdateRadar($_IPS["TARGET"]);');
-        // Interner Fallback: Wetter/Forecast wird primär per VM_UPDATE aktualisiert.
-        // Dieser Timer bleibt bewusst nicht konfigurierbar.
-        $this->RegisterTimer('WeatherUpdate', 0, 'WTR_UpdateWeather($_IPS["TARGET"]);');
 
         // Gemerkte Variablen, auf deren VM_UPDATE die Wetter-/Forecast-Anzeige sofort aktualisiert wird.
         $this->RegisterAttributeString('WeatherWatchIDs', '[]');
@@ -39,15 +34,6 @@ class Regenradar extends IPSModuleStrict
     public function ApplyChanges(): void
     {
         parent::ApplyChanges();
-
-        $radarSeconds = max(60, $this->ReadPropertyInteger('RadarRefreshSeconds'));
-
-        // Radar aktiv abrufen, da Rainviewer/Rainbow keine Symcon-Variable aktualisieren.
-        $this->SetTimerInterval('RadarUpdate', $radarSeconds * 1000);
-
-        // Wetter/Forecast wird sofort über VM_UPDATE der Variablen aktualisiert.
-        // Der interne Fallback läuft stündlich und ist nicht in der Konfiguration sichtbar.
-        $this->SetTimerInterval('WeatherUpdate', 60 * 60 * 1000);
 
         // Wetter- und Forecast-Variablen überwachen: bei VM_UPDATE sofort nur die Wetterdaten neu senden.
         $this->RefreshWeatherWatchRegistrations();
@@ -67,6 +53,12 @@ class Regenradar extends IPSModuleStrict
         if (!is_array($watchIDs) || !in_array((int) $SenderID, array_map('intval', $watchIDs), true)) {
             return;
         }
+
+        $this->SendDebug(
+            'MessageSink',
+            'VM_UPDATE von "' . IPS_GetName($SenderID) . '" (ID ' . $SenderID . ') erkannt, Wetterdaten werden aktualisiert.',
+            0
+        );
 
         // Variable wurde geändert: nur Wetter + Forecast aktualisieren, kein HTML-Reload.
         $this->UpdateWeather();
@@ -96,6 +88,10 @@ class Regenradar extends IPSModuleStrict
                     'caption' => 'Wetterdaten',
                     'items' => [
                         [
+                            'type'    => 'Label',
+                            'caption' => "Das Modul erfordert eine installierte OpenWeatherOneCall Instanz. Bitte installieren Sie das Modul und legen Sie eine Instanz an."
+                        ],
+                        [
                             'type' => 'SelectObject',
                             'name' => 'OpenWeatherInstanceID',
                             'caption' => 'OpenWeatherOneCall Instanz',
@@ -104,25 +100,25 @@ class Regenradar extends IPSModuleStrict
                         [
                             'type' => 'SelectObject',
                             'name' => 'TemperatureID',
-                            'caption' => 'Temperatur Variable (0 = OpenWeather)',
+                            'caption' => 'Temperatur Variable (leer = kommt von OpenWeather)',
                             'objectType' => 2
                         ],
                         [
                             'type' => 'SelectObject',
                             'name' => 'HumidityID',
-                            'caption' => 'Luftfeuchte Variable (0 = OpenWeather)',
+                            'caption' => 'Luftfeuchte Variable (leer = kommt von OpenWeather)',
                             'objectType' => 2
                         ],
                         [
                             'type' => 'SelectObject',
                             'name' => 'WindSpeedID',
-                            'caption' => 'Wind Variable (0 = OpenWeather)',
+                            'caption' => 'Wind Variable (leer = kommt von OpenWeather)',
                             'objectType' => 2
                         ],
                         [
                             'type' => 'SelectObject',
                             'name' => 'Rain1hID',
-                            'caption' => 'Regen 1h Variable (0 = OpenWeather)',
+                            'caption' => 'Regen 1h Variable (leer = kommt von OpenWeather)',
                             'objectType' => 2
                         ],
                     ],
@@ -156,21 +152,23 @@ class Regenradar extends IPSModuleStrict
                         'type' => 'Select',
                         'name' => 'RainbowColor',
                         'caption' => 'Farbpalette',
-                        'options' => [
-                            ['caption' => '0 - Original', 'value' => 0],
-                            ['caption' => '1 - Dark Sky', 'value' => 1],
-                            ['caption' => '2 - Meteored', 'value' => 2],
-                            ['caption' => '3 - NEXRAD', 'value' => 3],
-                            ['caption' => '4 - Rainbow Classic', 'value' => 4],
-                            ['caption' => '5 - RainViewer', 'value' => 5],
-                            ['caption' => '6 - SELEX-IS', 'value' => 6],
-                            ['caption' => '7 - TITAN', 'value' => 7],
-                            ['caption' => '8 - Universal Blue', 'value' => 8],
-                            ['caption' => '9 - The Weather Channel', 'value' => 9],
+                        'options' => 
+                        [
+                            ['caption' => '0 - Rainbow', 'value' => 0],
+                            ['caption' => '1 - TWC', 'value' => 1],
+                            ['caption' => '2 - Dark Sky', 'value' => 2],
+                            ['caption' => '3 - Meteored', 'value' => 3],
+                            ['caption' => '4 - Nexrad', 'value' => 4],
+                            ['caption' => '5 - Rainviewer', 'value' => 5],
+                            ['caption' => '6 - Selex', 'value' => 6],
+                            ['caption' => '7 - Titan', 'value' => 7],
+                            ['caption' => '8 - Rainviewer Universal Blue', 'value' => 8],
+                            ['caption' => '9 - Rainviewer TWC', 'value' => 9],
                         ]
                     ],
                         ['type' => 'NumberSpinner', 'name' => 'RadarRefreshSeconds', 'caption' => 'Radar aktualisieren alle Sekunden', 'minimum' => 60],
                         ['type' => 'CheckBox', 'name' => 'EnableAutoplay', 'caption' => 'Autoplay aktivieren'],
+                        ['type' => 'CheckBox', 'name' => 'ShowTileDebug', 'caption' => 'Tile-Debug im HTML anzeigen'],
                     ],
                 ],
                 [
@@ -214,6 +212,20 @@ class Regenradar extends IPSModuleStrict
                     'type' => 'Button',
                     'caption' => 'HTML neu laden',
                     'onClick' => 'IPS_RequestAction($id, "ReloadHtml", true);',
+                ],
+                [
+                    'type'  => 'RowLayout',
+                    'items' => [
+                        [
+                                'type'   => 'Image',
+                                'onClick'=> "echo 'https://paypal.me/mbstern';",
+                                'image'=> "data:image/jpeg;base64,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"
+                        ],
+                        [
+                            'type'    => 'Label',
+                            'caption' => "Sag danke und unterstütze den Modulentwickler: paypal.me/mbstern"
+                        ],
+                    ],
                 ],
             ],
         ];
@@ -456,6 +468,25 @@ class Regenradar extends IPSModuleStrict
         #wr-status {
             display: none;
         }
+        #wr-tile-debug {
+            top: 10px;
+            left: 58px;
+            width: max-content;
+            min-width: 0;
+            max-width: min(240px, calc(100% - 68px));
+            box-sizing: border-box;
+            display: none;
+            font-size: var(--wr-fs-small);
+            line-height: 1.25;
+            white-space: nowrap;
+        }
+        #wr-tile-debug .wr-debug-title {
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+        #wr-tile-debug .wr-debug-line {
+            opacity: .95;
+        }
         /* Tooltip 1:1 wie im Script: gleiche Variablen, gleiche Abstände, gleicher Schatten. */
         .tooltip {
             position: fixed;
@@ -526,6 +557,19 @@ class Regenradar extends IPSModuleStrict
                 text-align: right;
                 flex-wrap: wrap;
                 gap: 6px;
+            }
+        }
+
+        @media (max-width: 700px) {
+            #wr-tile-debug {
+                left: 8px;
+                right: auto;
+                top: 8px;
+                width: max-content;
+                min-width: 0;
+                max-width: calc(100% - 16px);
+                font-size: 10px;
+                white-space: nowrap;
             }
         }
 
@@ -603,6 +647,8 @@ class Regenradar extends IPSModuleStrict
 
     <div id="map"></div>
 
+    <div id="wr-tile-debug" class="wr-panel"></div>
+
     <div id="wr-current" class="wr-panel">
         <div class="wr-value"><img src="https://raw.githubusercontent.com/basmilius/weather-icons/dev/production/fill/svg/thermometer.svg" alt=""><span id="wr-temp">–</span></div>
         <div class="wr-value"><img src="https://raw.githubusercontent.com/basmilius/weather-icons/dev/production/fill/svg/humidity.svg" alt=""><span id="wr-humidity">–</span></div>
@@ -671,7 +717,10 @@ let wrConfig = (WR_INITIAL && WR_INITIAL.data && WR_INITIAL.data.config) ? WR_IN
 let wrFrames = [];
 let wrFrameIndex = 0;
 let wrAnimationTimer = null;
+let wrRadarRefreshTimer = null;
+let wrLastRadarRequestAt = 0;
 let wrRadarLayerCache = {};
+let wrTileDebugStats = { frame: '-', provider: '-', started: 0, loaded: 0, errors: 0, complete: false };
 const WR_ANIMATION_DELAY_MS = 1000;
 const wrPlaySvg = '<svg viewBox="0 0 24 24"><path d="M8 5l12 7-12 7V5z"/></svg>';
 const wrPauseSvg = '<svg viewBox="0 0 24 24"><path d="M8 5h3v14H8V5zm5 0h3v14h-3V5z"/></svg>';
@@ -756,26 +805,90 @@ function wrWrapFrameIndex(index) {
     return index;
 }
 
+
+function wrSetTileDebugVisible() {
+    const box = document.getElementById('wr-tile-debug');
+    if (!box) return;
+    box.style.display = (wrConfig && wrConfig.showTileDebug) ? 'block' : 'none';
+}
+
+function wrUpdateTileDebug() {
+    const box = document.getElementById('wr-tile-debug');
+    if (!box) return;
+
+    wrSetTileDebugVisible();
+    if (!wrConfig || !wrConfig.showTileDebug) return;
+
+    box.innerHTML =
+        '<div class="wr-debug-title">Tile-Debug</div>' +
+        '<div class="wr-debug-line">Provider: ' + wrEscapeHtml(wrTileDebugStats.provider) + '</div>' +
+        '<div class="wr-debug-line">Frame: ' + wrEscapeHtml(wrTileDebugStats.frame) + '</div>' +
+        '<div class="wr-debug-line">Start: ' + wrTileDebugStats.started + '</div>' +
+        '<div class="wr-debug-line">Geladen: ' + wrTileDebugStats.loaded + '</div>' +
+        '<div class="wr-debug-line">Fehler: ' + wrTileDebugStats.errors + '</div>' +
+        '<div class="wr-debug-line">Status: ' + (wrTileDebugStats.complete ? 'vollständig' : 'lädt') + '</div>';
+}
+
+function wrAttachTileDebug(layer, frame) {
+    if (!layer || !frame) return layer;
+
+    const frameLabel = frame.time ? new Date(Number(frame.time) * 1000).toLocaleTimeString() : '-';
+    wrTileDebugStats = {
+        frame: frameLabel,
+        provider: wrRadarPayload && wrRadarPayload.provider ? wrRadarPayload.provider : '-',
+        started: 0,
+        loaded: 0,
+        errors: 0,
+        complete: false
+    };
+    wrUpdateTileDebug();
+
+    layer.on('tileloadstart', function() {
+        wrTileDebugStats.started++;
+        wrTileDebugStats.complete = false;
+        wrUpdateTileDebug();
+    });
+
+    layer.on('tileload', function() {
+        wrTileDebugStats.loaded++;
+        wrUpdateTileDebug();
+    });
+
+    layer.on('tileerror', function() {
+        wrTileDebugStats.errors++;
+        wrUpdateTileDebug();
+    });
+
+    layer.on('load', function() {
+        wrTileDebugStats.complete = true;
+        wrUpdateTileDebug();
+    });
+
+    return layer;
+}
+
 function wrBuildRadarLayer(frame) {
     if (!wrRadarPayload || !frame) return null;
+
+    let layer = null;
 
     if (wrRadarPayload.provider === 'rainviewer') {
         const host = wrRadarPayload.host || '';
         const tileSize = window.devicePixelRatio >= 2 ? 512 : 256;
-        return L.tileLayer(
+        layer = L.tileLayer(
             host + frame.path + '/' + tileSize + '/{z}/{x}/{y}/2/1_1.png',
             { tileSize: 256, opacity: 0, maxNativeZoom: 7, maxZoom: 7 }
         );
     }
 
     if (wrRadarPayload.provider === 'rainbow') {
-        return L.tileLayer(
+        layer = L.tileLayer(
             frame.url,
             { tileSize: 256, opacity: 0, maxNativeZoom: 12, maxZoom: 12 }
         );
     }
 
-    return null;
+    return wrAttachTileDebug(layer, frame);
 }
 
 function wrRadarCacheKey(frame) {
@@ -820,6 +933,18 @@ function wrShowFrame(index) {
     }
 
     let layer = wrRadarLayerCache[cacheKey] || null;
+    if (layer && wrConfig && wrConfig.showTileDebug) {
+        const frameLabel = frame.time ? new Date(Number(frame.time) * 1000).toLocaleTimeString() : '-';
+        wrTileDebugStats = {
+            frame: frameLabel + ' (Cache)',
+            provider: wrRadarPayload && wrRadarPayload.provider ? wrRadarPayload.provider : '-',
+            started: 0,
+            loaded: 0,
+            errors: 0,
+            complete: true
+        };
+        wrUpdateTileDebug();
+    }
     if (!layer) {
         layer = wrBuildRadarLayer(frame);
         if (!layer) return;
@@ -995,6 +1120,7 @@ function wrInitMap(config) {
     if (!config || wrMap) return;
 
     wrRenderLegend(config.legend || null);
+    wrSetTileDebugVisible();
 
     const root = document.getElementById('wetterradar-root');
     if (root && config.theme === 'light') {
@@ -1074,6 +1200,7 @@ function wrHandlePayload(payload) {
     if (payload.data && payload.data.config) {
         wrConfig = payload.data.config;
         wrRenderLegend(wrConfig.legend || null);
+        wrSetTileDebugVisible();
     }
 
     if (payload.type === 'reload') {
@@ -1117,36 +1244,167 @@ function handleMessage(message) {
     }
 }
 
+
+function wrGetRadarRefreshMilliseconds() {
+    const seconds=Math.max(60,Number(wrConfig&&wrConfig.radarRefreshSeconds)||600);
+    return seconds*1000;
+}
+function wrStartRadarRefreshTimer(){
+    wrStopRadarRefreshTimer();
+    if(document.visibilityState!=='visible') return;
+    wrRadarRefreshTimer=window.setInterval(function(){
+        if(document.visibilityState==='visible'){requestAction('RefreshRadar',true);}
+    },wrGetRadarRefreshMilliseconds());
+}
+function wrStopRadarRefreshTimer(){
+    if(wrRadarRefreshTimer!==null){clearInterval(wrRadarRefreshTimer);wrRadarRefreshTimer=null;}
+}
+function wrHandleRadarVisibilityChange(){
+    if(document.visibilityState==='visible'){
+        requestAction('RefreshRadar',true);
+        wrStartRadarRefreshTimer();
+    }else{
+        wrStopRadarRefreshTimer();
+        wrStopAnimation();
+    }
+}
 function wrPlaceControlsOnPhone() {
+    const root = document.getElementById('wetterradar-root');
     const controls = document.getElementById('wr-controls');
     const current = document.getElementById('wr-current');
-    if (!controls || !current) return;
+    const debug = document.getElementById('wr-tile-debug');
+    if (!root || !controls || !current) return;
 
-    function update() {
+    let positionFrame = null;
+
+    function updateNow() {
+        const rootRect = root.getBoundingClientRect();
         const isPhone = window.matchMedia('(max-width: 539px)').matches;
+        const isSmall = window.matchMedia('(max-width: 700px)').matches;
+
         if (isPhone) {
-            const root = document.getElementById('wetterradar-root');
-            const rootRect = root ? root.getBoundingClientRect() : { top: 0 };
-            const rect = current.getBoundingClientRect();
-            const top = Math.max(8, rect.bottom - rootRect.top + 3);
-            controls.style.top = top + 'px';
+            const currentRect = current.getBoundingClientRect();
+            const controlsTop = Math.max(8, currentRect.bottom - rootRect.top + 3);
+            controls.style.top = controlsTop + 'px';
         } else {
             controls.style.top = '10px';
         }
+
+        if (debug) {
+            if (isSmall) {
+                const currentRect = current.getBoundingClientRect();
+                const controlsRect = controls.getBoundingClientRect();
+                const gap = 6;
+
+                // MOBILE TILE-DEBUG FIX v2:
+                // Linke Kante = linke Kante der Wetterdatenbox.
+                // Obere Kante = obere Kante des Steuerfelds.
+                // Rechte Kante endet vor dem Steuerfeld.
+                const left = Math.max(8, Math.round(currentRect.left - rootRect.left));
+                const top = Math.max(8, Math.round(controlsRect.top - rootRect.top));
+                const controlsLeft = Math.round(controlsRect.left - rootRect.left);
+                const availableWidth = Math.max(0, controlsLeft - left - gap);
+
+                debug.style.setProperty('left', left + 'px', 'important');
+                debug.style.setProperty('right', 'auto', 'important');
+                debug.style.setProperty('top', top + 'px', 'important');
+                debug.style.setProperty('min-width', '0', 'important');
+                debug.style.setProperty('box-sizing', 'border-box', 'important');
+
+                // Zuerst natürliche Textbreite ohne Umbruch bestimmen.
+                debug.style.setProperty('width', 'max-content', 'important');
+                debug.style.setProperty('max-width', 'none', 'important');
+                debug.style.setProperty('white-space', 'nowrap', 'important');
+                const naturalWidth = Math.ceil(debug.getBoundingClientRect().width);
+
+                // Nur den tatsächlich benötigten Platz verwenden, jedoch nie ins Steuerfeld ragen.
+                const finalWidth = Math.min(naturalWidth, availableWidth);
+                debug.style.setProperty('width', Math.max(0, finalWidth) + 'px', 'important');
+                debug.style.setProperty('max-width', Math.max(0, availableWidth) + 'px', 'important');
+                debug.style.setProperty(
+                    'white-space',
+                    naturalWidth > availableWidth ? 'normal' : 'nowrap',
+                    'important'
+                );
+                debug.style.setProperty('overflow-wrap', 'anywhere', 'important');
+            } else {
+                debug.style.removeProperty('right');
+                debug.style.setProperty('top', '10px', 'important');
+                debug.style.setProperty('left', '58px', 'important');
+                debug.style.setProperty('width', 'max-content', 'important');
+                debug.style.setProperty('max-width', 'min(240px, calc(100% - 68px))', 'important');
+                debug.style.setProperty('white-space', 'nowrap', 'important');
+                debug.style.removeProperty('overflow-wrap');
+            }
+        }
+
         if (wrMap && wrMap.invalidateSize) {
             setTimeout(function() { wrMap.invalidateSize(); }, 0);
         }
     }
 
+    function update() {
+        if (positionFrame !== null) {
+            cancelAnimationFrame(positionFrame);
+        }
+        positionFrame = requestAnimationFrame(function() {
+            positionFrame = null;
+            updateNow();
+        });
+    }
+
     update();
     window.addEventListener('resize', update);
-    try { new ResizeObserver(update).observe(document.documentElement); } catch(e) {}
+    window.addEventListener('orientationchange', update);
+
+    try {
+        const observer = new ResizeObserver(update);
+        observer.observe(root);
+        observer.observe(current);
+        observer.observe(controls);
+    } catch(e) {}
+
+    if (debug) {
+        try {
+            new MutationObserver(update).observe(debug, {
+                childList: true,
+                subtree: true,
+                characterData: true,
+                attributes: true,
+                attributeFilter: ['style', 'class']
+            });
+        } catch(e) {}
+    }
+
+    // Nach Aufbau und Schrift-/Layoutberechnung nochmals sicher positionieren.
+    setTimeout(update, 0);
+    setTimeout(update, 100);
+    setTimeout(update, 300);
 }
 
 
 wrSetupControls();
-wrPlaceControlsOnPhone();
 wrHandlePayload(WR_INITIAL);
+wrPlaceControlsOnPhone();
+
+// WR_INITIAL kann von IP-Symcon aus einem bereits erzeugten HTML stammen.
+// Deshalb beim tatsächlichen Öffnen der sichtbaren Visualisierung immer
+// einmal aktuelle Radar-Metadaten anfordern. Danach läuft der normale Rhythmus.
+wrLastRadarRequestAt = 0;
+
+document.addEventListener('visibilitychange', wrHandleRadarVisibilityChange);
+window.addEventListener('pagehide', function() {
+    wrStopRadarRefreshTimer();
+    wrStopAnimation();
+});
+window.addEventListener('beforeunload', function() {
+    wrStopRadarRefreshTimer();
+    wrStopAnimation();
+});
+
+requestAction('RefreshRadar', true);
+wrStartRadarRefreshTimer();
+
 setTimeout(function() {
     if (wrMap) wrMap.invalidateSize();
 }, 250);
@@ -1162,7 +1420,12 @@ HTML;
 
     public function UpdateRadar(): void
     {
-        $this->SendDebug('UpdateRadar', 'Radar-Aktualisierung gestartet', 0);
+        $this->SendDebug(
+            'UpdateRadar',
+            'Radar-Aktualisierung gestartet. Provider=' . $this->ReadPropertyString('RadarProvider'),
+            0
+        );
+
         $this->SendVisualizationMessage('radar', $this->BuildRadarPayload());
     }
 
@@ -1204,6 +1467,7 @@ HTML;
             'radarMaxZoom' => $radarMaxZoom,
             'radarRefreshSeconds' => max(60, $this->ReadPropertyInteger('RadarRefreshSeconds')),
             'enableAutoplay' => $this->ReadPropertyBoolean('EnableAutoplay'),
+            'showTileDebug' => $this->ReadPropertyBoolean('ShowTileDebug'),
             'legend' => $this->BuildRadarLegendPayload(),
             'mapTileUrl' => $mapTileUrl,
             'mapAttribution' => $mapAttribution,
@@ -1403,6 +1667,11 @@ HTML;
         $data = json_decode($json, true);
 
         if (!is_array($data) || !isset($data['host']) || !isset($data['radar']['past']) || !is_array($data['radar']['past'])) {
+            $this->SendDebug(
+                'BuildRainviewerPayload',
+                'RainViewer API liefert ungültige oder unvollständige Daten.',
+                0
+            );
             return [
                 'provider' => 'rainviewer',
                 'host' => '',
@@ -1410,6 +1679,13 @@ HTML;
                 'error' => 'Rainviewer-Daten ungültig'
             ];
         }
+
+        $this->SendDebug(
+            'BuildRainviewerPayload',
+            'RainViewer Frames geladen: ' . count($data['radar']['past']) .
+            ', Host=' . (string) $data['host'],
+            0
+        );
 
         return [
             'provider' => 'rainviewer',
@@ -1426,6 +1702,11 @@ HTML;
         $color = min(max(0, $this->ReadPropertyInteger('RainbowColor')), 9);
 
         if ($apiKey === '') {
+            $this->SendDebug(
+                'BuildRainbowPayload',
+                'Rainbow Snapshot ungültig oder API-Antwort fehlerhaft.',
+                0
+            );
             return [
                 'provider' => 'rainbow',
                 'frames' => [],
@@ -1439,6 +1720,12 @@ HTML;
         $snapshot = (is_array($data) && isset($data['snapshot'])) ? (int) $data['snapshot'] : 0;
 
         if ($snapshot <= 0) {
+            $this->SendDebug(
+                'BuildRainbowPayload',
+                'Rainbow Snapshot ungültig oder API-Antwort fehlerhaft.',
+                0
+            );
+
             return [
                 'provider' => 'rainbow',
                 'frames' => [],
@@ -1464,6 +1751,12 @@ HTML;
                 'url' => $this->BuildRainbowTileUrl($layer, $snapshot, $step, $color, $apiKey)
             ];
         }
+
+        $this->SendDebug(
+            'BuildRainbowPayload',
+            'Rainbow Snapshot=' . $snapshot . ', Layer=' . $layer . ', Color=' . $color . ', Frames=' . count($frames),
+            0
+        );
 
         return [
             'provider' => 'rainbow',
@@ -1543,7 +1836,13 @@ HTML;
             }
         }
 
-        return [$this->ReadPropertyFloat('Latitude'), $this->ReadPropertyFloat('Longitude')];
+        $this->SendDebug(
+            'GetLocation',
+            'Keine gültigen Koordinaten in der OpenWeatherOneCall-Instanz gefunden. OpenWeatherInstanceID=' . $owmInstID,
+            0
+        );
+
+        return [0.0, 0.0];
     }
 
     private function GetMapStyle(): array
