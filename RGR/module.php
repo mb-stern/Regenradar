@@ -1246,81 +1246,28 @@ function handleMessage(message) {
 
 
 function wrGetRadarRefreshMilliseconds() {
-    const seconds = Math.max(
-        60,
-        Number(wrConfig && wrConfig.radarRefreshSeconds) || 600
-    );
-
-    return seconds * 1000;
+    const seconds=Math.max(60,Number(wrConfig&&wrConfig.radarRefreshSeconds)||600);
+    return seconds*1000;
 }
-
-function wrStopRadarRefreshTimer() {
-    if (wrRadarRefreshTimer !== null) {
-        clearTimeout(wrRadarRefreshTimer);
-        wrRadarRefreshTimer = null;
-    }
-}
-
-function wrScheduleNextRadarRefresh(delayMilliseconds) {
+function wrStartRadarRefreshTimer(){
     wrStopRadarRefreshTimer();
-
-    if (document.visibilityState !== 'visible') {
-        return;
-    }
-
-    const delay = Math.max(1000, Number(delayMilliseconds) || wrGetRadarRefreshMilliseconds());
-
-    wrRadarRefreshTimer = window.setTimeout(function() {
-        wrRadarRefreshTimer = null;
-        wrRequestRadarUpdate();
-    }, delay);
+    if(document.visibilityState!=='visible') return;
+    wrRadarRefreshTimer=window.setInterval(function(){
+        if(document.visibilityState==='visible'){requestAction('RefreshRadar',true);}
+    },wrGetRadarRefreshMilliseconds());
 }
-
-function wrRequestRadarUpdate() {
-    if (document.visibilityState !== 'visible') {
-        return;
-    }
-
-    // Zeitpunkt vor dem Request setzen, damit bei langsamer Antwort kein Doppelabruf entsteht.
-    wrLastRadarRequestAt = Date.now();
-
-    try {
-        requestAction('RefreshRadar', true);
-    } catch (e) {
-        console.warn('Radar-Aktualisierung konnte nicht angefordert werden:', e);
-    }
-
-    // Nach jedem Abruf beginnt das konfigurierte Intervall von Neuem.
-    wrScheduleNextRadarRefresh(wrGetRadarRefreshMilliseconds());
+function wrStopRadarRefreshTimer(){
+    if(wrRadarRefreshTimer!==null){clearInterval(wrRadarRefreshTimer);wrRadarRefreshTimer=null;}
 }
-
-function wrResumeRadarRefresh() {
-    if (document.visibilityState !== 'visible') {
-        return;
-    }
-
-    const interval = wrGetRadarRefreshMilliseconds();
-    const elapsed = Date.now() - wrLastRadarRequestAt;
-
-    // War die Visualisierung länger verborgen als das Intervall, sofort aktualisieren.
-    if (wrLastRadarRequestAt <= 0 || elapsed >= interval) {
-        wrRequestRadarUpdate();
-        return;
-    }
-
-    // Sonst nur die noch verbleibende Zeit bis zum nächsten regulären Abruf abwarten.
-    wrScheduleNextRadarRefresh(interval - elapsed);
-}
-
-function wrHandleRadarVisibilityChange() {
-    if (document.visibilityState === 'visible') {
-        wrResumeRadarRefresh();
-    } else {
+function wrHandleRadarVisibilityChange(){
+    if(document.visibilityState==='visible'){
+        requestAction('RefreshRadar',true);
+        wrStartRadarRefreshTimer();
+    }else{
         wrStopRadarRefreshTimer();
         wrStopAnimation();
     }
 }
-
 function wrPlaceControlsOnPhone() {
     const root = document.getElementById('wetterradar-root');
     const controls = document.getElementById('wr-controls');
@@ -1455,7 +1402,8 @@ window.addEventListener('beforeunload', function() {
     wrStopAnimation();
 });
 
-wrResumeRadarRefresh();
+requestAction('RefreshRadar', true);
+wrStartRadarRefreshTimer();
 
 setTimeout(function() {
     if (wrMap) wrMap.invalidateSize();
