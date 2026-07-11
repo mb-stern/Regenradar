@@ -2,7 +2,7 @@
 
 class Regenradar extends IPSModuleStrict
 {
-    // Tile-Debug Mobile-Layout Fix v2
+    // Tile-Debug Mobile-Layout Fix v3 – sofortiger Radarabruf beim Öffnen
     public function Create(): void
     {
         parent::Create();
@@ -1440,9 +1440,10 @@ wrSetupControls();
 wrHandlePayload(WR_INITIAL);
 wrPlaceControlsOnPhone();
 
-// Der erste Radarabruf wurde bereits beim Erzeugen des HTML ausgeführt.
-// Deshalb beginnt der nächste Abruf erst nach dem eingestellten Intervall.
-wrLastRadarRequestAt = Date.now();
+// WR_INITIAL kann von IP-Symcon aus einem bereits erzeugten HTML stammen.
+// Deshalb beim tatsächlichen Öffnen der sichtbaren Visualisierung immer
+// einmal aktuelle Radar-Metadaten anfordern. Danach läuft der normale Rhythmus.
+wrLastRadarRequestAt = 0;
 
 document.addEventListener('visibilitychange', wrHandleRadarVisibilityChange);
 window.addEventListener('pagehide', function() {
