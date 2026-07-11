@@ -1,6 +1,6 @@
 # Regenradar für IP-Symcon
 
-Ein modernes HTML-Visualisierungsmodul für **IP-Symcon**, das Wetterdaten aus **OpenWeather OneCall** mit einem animierten Regenradar kombiniert.
+Ein modernes HTML-Visualisierungsmodul für **IP-Symcon**, das Wetterdaten aus **OpenWeather OneCall** und der eigenen Wetterstation mit einem animierten Regenradar kombiniert.
 
 Das Modul wurde für Desktop, Tablet und Smartphone optimiert und legt besonderen Wert auf eine schnelle Darstellung sowie möglichst wenig unnötigen Netzwerkverkehr.
 
