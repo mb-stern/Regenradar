@@ -2,6 +2,7 @@
 
 class Regenradar extends IPSModuleStrict
 {
+    // Tile-Debug Mobile-Layout Fix v2
     public function Create(): void
     {
         parent::Create();
@@ -23,11 +24,6 @@ class Regenradar extends IPSModuleStrict
         $this->RegisterPropertyString('Theme', 'dark');
         $this->RegisterPropertyString('MapStyle', 'street');
 
-        $this->RegisterTimer('RadarUpdate', 0, 'RGR_UpdateRadar($_IPS["TARGET"]);');
-        // Interner Fallback: Wetter/Forecast wird primär per VM_UPDATE aktualisiert.
-        // Dieser Timer bleibt bewusst nicht konfigurierbar.
-        $this->RegisterTimer('WeatherUpdate', 0, 'RGR_UpdateWeather($_IPS["TARGET"]);');
-
         // Gemerkte Variablen, auf deren VM_UPDATE die Wetter-/Forecast-Anzeige sofort aktualisiert wird.
         $this->RegisterAttributeString('WeatherWatchIDs', '[]');
 
@@ -38,14 +34,6 @@ class Regenradar extends IPSModuleStrict
     public function ApplyChanges(): void
     {
         parent::ApplyChanges();
-
-        // Kein dauerhaft laufender serverseitiger Radar-Timer.
-        // Die geöffnete und sichtbare Visualisierung fordert die Radarupdates selbst an.
-        $this->SetTimerInterval('RadarUpdate', 0);
-
-        // Wetter/Forecast wird sofort über VM_UPDATE der Variablen aktualisiert.
-        // Der interne Fallback läuft stündlich und ist nicht in der Konfiguration sichtbar.
-        $this->SetTimerInterval('WeatherUpdate', 60 * 60 * 1000);
 
         // Wetter- und Forecast-Variablen überwachen: bei VM_UPDATE sofort nur die Wetterdaten neu senden.
         $this->RefreshWeatherWatchRegistrations();
@@ -483,12 +471,14 @@ class Regenradar extends IPSModuleStrict
         #wr-tile-debug {
             top: 10px;
             left: 58px;
-            min-width: 170px;
-            max-width: 240px;
+            width: max-content;
+            min-width: 0;
+            max-width: min(240px, calc(100% - 68px));
+            box-sizing: border-box;
             display: none;
             font-size: var(--wr-fs-small);
             line-height: 1.25;
-            white-space: normal;
+            white-space: nowrap;
         }
         #wr-tile-debug .wr-debug-title {
             font-weight: 700;
@@ -570,14 +560,20 @@ class Regenradar extends IPSModuleStrict
             }
         }
 
-        @media (max-width: 539px) {
+        @media (max-width: 700px) {
             #wr-tile-debug {
-                left: 54px;
+                left: 8px;
+                right: auto;
                 top: 8px;
-                min-width: 150px;
-                max-width: calc(100vw - 190px);
+                width: max-content;
+                min-width: 0;
+                max-width: calc(100% - 16px);
                 font-size: 10px;
+                white-space: nowrap;
             }
+        }
+
+        @media (max-width: 539px) {
             #wr-current {
                 top: 8px;
                 left: auto;
@@ -1326,35 +1322,123 @@ function wrHandleRadarVisibilityChange() {
 }
 
 function wrPlaceControlsOnPhone() {
+    const root = document.getElementById('wetterradar-root');
     const controls = document.getElementById('wr-controls');
     const current = document.getElementById('wr-current');
-    if (!controls || !current) return;
+    const debug = document.getElementById('wr-tile-debug');
+    if (!root || !controls || !current) return;
 
-    function update() {
+    let positionFrame = null;
+
+    function updateNow() {
+        const rootRect = root.getBoundingClientRect();
         const isPhone = window.matchMedia('(max-width: 539px)').matches;
+        const isSmall = window.matchMedia('(max-width: 700px)').matches;
+
         if (isPhone) {
-            const root = document.getElementById('wetterradar-root');
-            const rootRect = root ? root.getBoundingClientRect() : { top: 0 };
-            const rect = current.getBoundingClientRect();
-            const top = Math.max(8, rect.bottom - rootRect.top + 3);
-            controls.style.top = top + 'px';
+            const currentRect = current.getBoundingClientRect();
+            const controlsTop = Math.max(8, currentRect.bottom - rootRect.top + 3);
+            controls.style.top = controlsTop + 'px';
         } else {
             controls.style.top = '10px';
         }
+
+        if (debug) {
+            if (isSmall) {
+                const currentRect = current.getBoundingClientRect();
+                const controlsRect = controls.getBoundingClientRect();
+                const gap = 6;
+
+                // MOBILE TILE-DEBUG FIX v2:
+                // Linke Kante = linke Kante der Wetterdatenbox.
+                // Obere Kante = obere Kante des Steuerfelds.
+                // Rechte Kante endet vor dem Steuerfeld.
+                const left = Math.max(8, Math.round(currentRect.left - rootRect.left));
+                const top = Math.max(8, Math.round(controlsRect.top - rootRect.top));
+                const controlsLeft = Math.round(controlsRect.left - rootRect.left);
+                const availableWidth = Math.max(0, controlsLeft - left - gap);
+
+                debug.style.setProperty('left', left + 'px', 'important');
+                debug.style.setProperty('right', 'auto', 'important');
+                debug.style.setProperty('top', top + 'px', 'important');
+                debug.style.setProperty('min-width', '0', 'important');
+                debug.style.setProperty('box-sizing', 'border-box', 'important');
+
+                // Zuerst natürliche Textbreite ohne Umbruch bestimmen.
+                debug.style.setProperty('width', 'max-content', 'important');
+                debug.style.setProperty('max-width', 'none', 'important');
+                debug.style.setProperty('white-space', 'nowrap', 'important');
+                const naturalWidth = Math.ceil(debug.getBoundingClientRect().width);
+
+                // Nur den tatsächlich benötigten Platz verwenden, jedoch nie ins Steuerfeld ragen.
+                const finalWidth = Math.min(naturalWidth, availableWidth);
+                debug.style.setProperty('width', Math.max(0, finalWidth) + 'px', 'important');
+                debug.style.setProperty('max-width', Math.max(0, availableWidth) + 'px', 'important');
+                debug.style.setProperty(
+                    'white-space',
+                    naturalWidth > availableWidth ? 'normal' : 'nowrap',
+                    'important'
+                );
+                debug.style.setProperty('overflow-wrap', 'anywhere', 'important');
+            } else {
+                debug.style.removeProperty('right');
+                debug.style.setProperty('top', '10px', 'important');
+                debug.style.setProperty('left', '58px', 'important');
+                debug.style.setProperty('width', 'max-content', 'important');
+                debug.style.setProperty('max-width', 'min(240px, calc(100% - 68px))', 'important');
+                debug.style.setProperty('white-space', 'nowrap', 'important');
+                debug.style.removeProperty('overflow-wrap');
+            }
+        }
+
         if (wrMap && wrMap.invalidateSize) {
             setTimeout(function() { wrMap.invalidateSize(); }, 0);
         }
     }
 
+    function update() {
+        if (positionFrame !== null) {
+            cancelAnimationFrame(positionFrame);
+        }
+        positionFrame = requestAnimationFrame(function() {
+            positionFrame = null;
+            updateNow();
+        });
+    }
+
     update();
     window.addEventListener('resize', update);
-    try { new ResizeObserver(update).observe(document.documentElement); } catch(e) {}
+    window.addEventListener('orientationchange', update);
+
+    try {
+        const observer = new ResizeObserver(update);
+        observer.observe(root);
+        observer.observe(current);
+        observer.observe(controls);
+    } catch(e) {}
+
+    if (debug) {
+        try {
+            new MutationObserver(update).observe(debug, {
+                childList: true,
+                subtree: true,
+                characterData: true,
+                attributes: true,
+                attributeFilter: ['style', 'class']
+            });
+        } catch(e) {}
+    }
+
+    // Nach Aufbau und Schrift-/Layoutberechnung nochmals sicher positionieren.
+    setTimeout(update, 0);
+    setTimeout(update, 100);
+    setTimeout(update, 300);
 }
 
 
 wrSetupControls();
-wrPlaceControlsOnPhone();
 wrHandlePayload(WR_INITIAL);
+wrPlaceControlsOnPhone();
 
 // Der erste Radarabruf wurde bereits beim Erzeugen des HTML ausgeführt.
 // Deshalb beginnt der nächste Abruf erst nach dem eingestellten Intervall.
