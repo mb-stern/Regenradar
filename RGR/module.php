@@ -23,7 +23,6 @@ class Regenradar extends IPSModuleStrict
         $this->RegisterPropertyString('Theme', 'dark');
         $this->RegisterPropertyString('MapStyle', 'street');
 
-        $this->RegisterTimer('RadarUpdate', 0, 'RGR_UpdateRadar($_IPS["TARGET"]);');
         // Interner Fallback: Wetter/Forecast wird primär per VM_UPDATE aktualisiert.
         // Dieser Timer bleibt bewusst nicht konfigurierbar.
         $this->RegisterTimer('WeatherUpdate', 0, 'RGR_UpdateWeather($_IPS["TARGET"]);');
@@ -38,11 +37,6 @@ class Regenradar extends IPSModuleStrict
     public function ApplyChanges(): void
     {
         parent::ApplyChanges();
-
-        $radarSeconds = max(60, $this->ReadPropertyInteger('RadarRefreshSeconds'));
-
-        // Radar aktiv abrufen, da Rainviewer/Rainbow keine Symcon-Variable aktualisieren.
-        $this->SetTimerInterval('RadarUpdate', $radarSeconds * 1000);
 
         // Wetter/Forecast wird sofort über VM_UPDATE der Variablen aktualisiert.
         // Der interne Fallback läuft stündlich und ist nicht in der Konfiguration sichtbar.
@@ -722,6 +716,8 @@ let wrConfig = (WR_INITIAL && WR_INITIAL.data && WR_INITIAL.data.config) ? WR_IN
 let wrFrames = [];
 let wrFrameIndex = 0;
 let wrAnimationTimer = null;
+let wrRadarRefreshTimer = null;
+let wrLastRadarRequestAt = 0;
 let wrRadarLayerCache = {};
 let wrTileDebugStats = { frame: '-', provider: '-', started: 0, loaded: 0, errors: 0, complete: false };
 const WR_ANIMATION_DELAY_MS = 1000;
@@ -1247,6 +1243,83 @@ function handleMessage(message) {
     }
 }
 
+
+function wrGetRadarRefreshMilliseconds() {
+    const seconds = Math.max(
+        60,
+        Number(wrConfig && wrConfig.radarRefreshSeconds) || 600
+    );
+
+    return seconds * 1000;
+}
+
+function wrStopRadarRefreshTimer() {
+    if (wrRadarRefreshTimer !== null) {
+        clearTimeout(wrRadarRefreshTimer);
+        wrRadarRefreshTimer = null;
+    }
+}
+
+function wrScheduleNextRadarRefresh(delayMilliseconds) {
+    wrStopRadarRefreshTimer();
+
+    if (document.visibilityState !== 'visible') {
+        return;
+    }
+
+    const delay = Math.max(1000, Number(delayMilliseconds) || wrGetRadarRefreshMilliseconds());
+
+    wrRadarRefreshTimer = window.setTimeout(function() {
+        wrRadarRefreshTimer = null;
+        wrRequestRadarUpdate();
+    }, delay);
+}
+
+function wrRequestRadarUpdate() {
+    if (document.visibilityState !== 'visible') {
+        return;
+    }
+
+    // Zeitpunkt vor dem Request setzen, damit bei langsamer Antwort kein Doppelabruf entsteht.
+    wrLastRadarRequestAt = Date.now();
+
+    try {
+        requestAction('RefreshRadar', true);
+    } catch (e) {
+        console.warn('Radar-Aktualisierung konnte nicht angefordert werden:', e);
+    }
+
+    // Nach jedem Abruf beginnt das konfigurierte Intervall von Neuem.
+    wrScheduleNextRadarRefresh(wrGetRadarRefreshMilliseconds());
+}
+
+function wrResumeRadarRefresh() {
+    if (document.visibilityState !== 'visible') {
+        return;
+    }
+
+    const interval = wrGetRadarRefreshMilliseconds();
+    const elapsed = Date.now() - wrLastRadarRequestAt;
+
+    // War die Visualisierung länger verborgen als das Intervall, sofort aktualisieren.
+    if (wrLastRadarRequestAt <= 0 || elapsed >= interval) {
+        wrRequestRadarUpdate();
+        return;
+    }
+
+    // Sonst nur die noch verbleibende Zeit bis zum nächsten regulären Abruf abwarten.
+    wrScheduleNextRadarRefresh(interval - elapsed);
+}
+
+function wrHandleRadarVisibilityChange() {
+    if (document.visibilityState === 'visible') {
+        wrResumeRadarRefresh();
+    } else {
+        wrStopRadarRefreshTimer();
+        wrStopAnimation();
+    }
+}
+
 function wrPlaceControlsOnPhone() {
     const controls = document.getElementById('wr-controls');
     const current = document.getElementById('wr-current');
@@ -1277,6 +1350,23 @@ function wrPlaceControlsOnPhone() {
 wrSetupControls();
 wrPlaceControlsOnPhone();
 wrHandlePayload(WR_INITIAL);
+
+// Der erste Radarabruf wurde bereits beim Erzeugen des HTML ausgeführt.
+// Deshalb beginnt der nächste Abruf erst nach dem eingestellten Intervall.
+wrLastRadarRequestAt = Date.now();
+
+document.addEventListener('visibilitychange', wrHandleRadarVisibilityChange);
+window.addEventListener('pagehide', function() {
+    wrStopRadarRefreshTimer();
+    wrStopAnimation();
+});
+window.addEventListener('beforeunload', function() {
+    wrStopRadarRefreshTimer();
+    wrStopAnimation();
+});
+
+wrResumeRadarRefresh();
+
 setTimeout(function() {
     if (wrMap) wrMap.invalidateSize();
 }, 250);
