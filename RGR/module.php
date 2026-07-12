@@ -1567,7 +1567,6 @@ HTML;
 
     public function UpdateWeather(): void
     {
-        $this->SendDebug('UpdateWeather', 'Wetter-Aktualisierung gestartet', 0);
         $this->SendVisualizationMessage('weather', $this->BuildWeatherPayload());
     }
 
