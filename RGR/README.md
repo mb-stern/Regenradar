@@ -141,6 +141,7 @@ Feedback, Verbesserungsvorschläge und Pull Requests sind jederzeit willkommen.
 **Version 1.1 (12.07.2026)**
 * Rückfall auf Location Control bei nicht oder nicht komplett konfigurierter OpenWeatherOneCall-Instanz.
 * Neuer Radar-Provider 'Meteo Swiss Open Data' liefert Bilder im fünf Minuten Abstand, leider nur für die Schweiz.
+* Vereinheitlichung der Farben über alle Radar-Provider und Anzeige der Regenmenge in Millimeter.
 
 
 **Version 1.0 (11.07.2026)**
