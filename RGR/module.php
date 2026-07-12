@@ -147,7 +147,7 @@ class Regenradar extends IPSModuleStrict
                                 ['caption' => 'Radars', 'value' => 'radars'],
                             ],
                         ],
-                        ['type' => 'NumberSpinner', 'name' => 'RadarRefreshSeconds', 'caption' => 'Auf neue Radarbilder prüfen alle Sekunden', 'minimum' => 60],
+                        ['type' => 'NumberSpinner', 'name' => 'RadarRefreshSeconds', 'caption' => 'Radar aktualisieren alle Sekunden', 'minimum' => 60],
                         ['type' => 'CheckBox', 'name' => 'EnableAutoplay', 'caption' => 'Autoplay aktivieren'],
                         ['type' => 'CheckBox', 'name' => 'ShowTileDebug', 'caption' => 'Tile-Debug im HTML anzeigen'],
                     ],
@@ -1819,72 +1819,62 @@ HTML;
 
     private function BuildMeteoswissPayload(): array
     {
-        $frames = [];
+        $item = null;
         $itemDate = '';
 
-        // Die Tages-Items werden in UTC geführt. Bei jedem Poll wird der aktuelle
-        // STAC-Inhalt cachefrei neu abgefragt. Erst abbrechen, wenn im Item
-        // tatsächlich passende RZC-Radarframes gefunden wurden.
+        // Die Tages-Items werden in UTC geführt. Rund um Mitternacht beide Tage prüfen.
         for ($daysBack = 0; $daysBack <= 2; $daysBack++) {
             $date = gmdate('Ymd', time() - ($daysBack * 86400));
             $url = 'https://data.geo.admin.ch/api/stac/v1/collections/' .
                 'ch.meteoschweiz.ogd-radar-precip/items/' . $date . '-ch' .
-                '?_=' . rawurlencode((string) microtime(true));
-
+                '?_=' . time();
             $json = $this->HttpGet(
                 $url,
                 [
                     'Accept: application/geo+json, application/json',
-                    'Cache-Control: no-cache, no-store, max-age=0',
+                    'Cache-Control: no-cache',
                     'Pragma: no-cache'
                 ],
                 20
             );
-
-            $item = json_decode($json, true);
-            if (!is_array($item) || !isset($item['assets']) || !is_array($item['assets'])) {
-                continue;
+            $candidate = json_decode($json, true);
+            if (is_array($candidate) && isset($candidate['assets']) && is_array($candidate['assets'])) {
+                $item = $candidate;
+                $itemDate = $date;
+                break;
             }
-
-            $candidateFrames = [];
-            foreach ($item['assets'] as $name => $asset) {
-                if (!is_string($name) || !preg_match('/^rzc(\d{2})(\d{3})(\d{2})(\d{2}).*\.h5$/i', $name, $match)) {
-                    continue;
-                }
-                if (!is_array($asset) || empty($asset['href'])) {
-                    continue;
-                }
-
-                $year = 2000 + (int) $match[1];
-                $dayOfYear = max(1, (int) $match[2]);
-                $hour = min(23, (int) $match[3]);
-                $minute = min(59, (int) $match[4]);
-                $base = gmmktime(0, 0, 0, 1, 1, $year);
-                $timestamp = $base + (($dayOfYear - 1) * 86400) + ($hour * 3600) + ($minute * 60);
-
-                $candidateFrames[] = [
-                    'time' => $timestamp,
-                    'url' => (string) $asset['href'],
-                    // Gesamtes RZC-Raster; wird im Browser von LV95 nach WGS84 umgerechnet.
-                    'bounds' => [[43.619, 2.68942], [49.3744, 12.4623]]
-                ];
-            }
-
-            if ($candidateFrames === []) {
-                continue;
-            }
-
-            $frames = $candidateFrames;
-            $itemDate = $date;
-            break;
         }
 
-        if ($frames === []) {
-            $this->SendDebug('BuildMeteoswissPayload', 'Keine aktuellen MeteoSwiss-RZC-Frames gefunden.', 0);
+        if (!is_array($item)) {
+            $this->SendDebug('BuildMeteoswissPayload', 'Kein aktuelles MeteoSwiss-STAC-Tagesitem gefunden.', 0);
             return [
                 'provider' => 'meteoswiss',
                 'frames' => [],
                 'error' => 'MeteoSwiss-Daten nicht erreichbar'
+            ];
+        }
+
+        $frames = [];
+        foreach ($item['assets'] as $name => $asset) {
+            if (!is_string($name) || !preg_match('/^rzc(\d{2})(\d{3})(\d{2})(\d{2}).*\.h5$/i', $name, $match)) {
+                continue;
+            }
+            if (!is_array($asset) || empty($asset['href'])) {
+                continue;
+            }
+
+            $year = 2000 + (int) $match[1];
+            $dayOfYear = max(1, (int) $match[2]);
+            $hour = min(23, (int) $match[3]);
+            $minute = min(59, (int) $match[4]);
+            $base = gmmktime(0, 0, 0, 1, 1, $year);
+            $timestamp = $base + (($dayOfYear - 1) * 86400) + ($hour * 3600) + ($minute * 60);
+
+            $frames[] = [
+                'time' => $timestamp,
+                'url' => (string) $asset['href'],
+                // Gesamtes RZC-Raster; wird im Browser von LV95 nach WGS84 umgerechnet.
+                'bounds' => [[43.619, 2.68942], [49.3744, 12.4623]]
             ];
         }
 
@@ -1897,8 +1887,11 @@ HTML;
             $frames = array_slice($frames, -12);
         }
 
-        $latestFrame = $frames[count($frames) - 1];
-        $latestFrameTime = gmdate('H:i:s', (int) $latestFrame['time']) . ' UTC';
+        $latestFrameTime = '-';
+        if (!empty($frames)) {
+            $latestFrame = $frames[count($frames) - 1];
+            $latestFrameTime = gmdate('H:i:s', (int) $latestFrame['time']) . ' UTC';
+        }
 
         $this->SendDebug(
             'BuildMeteoswissPayload',
