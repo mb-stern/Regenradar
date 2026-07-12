@@ -2,7 +2,7 @@
 
 Ein modernes HTML-Visualisierungsmodul für **IP-Symcon**, das Wetterdaten aus **OpenWeather OneCall** und der eigenen Wetterstation mit einem animierten Regenradar kombiniert.
 
-Voraussetzung ist ein installiertes **OpenWeather OneCall** Modul.
+Voraussetzung für die Wettervorhersage ist ein installiertes und konfiguriertes **OpenWeatherOneCall** Modul.
 
 Das Modul wurde für Desktop, Tablet und Smartphone optimiert und legt besonderen Wert auf eine schnelle Darstellung sowie möglichst wenig unnötigen Netzwerkverkehr.
 
@@ -138,6 +138,10 @@ Feedback, Verbesserungsvorschläge und Pull Requests sind jederzeit willkommen.
 ---
 
 ## Versionen
+
+**Version 1.1 (12.07.2026)**
+* Rückfall auf Location Control von Symcon bei nicht konfigurierter OpenWeatherOneCall-Instanz.
+
 
 **Version 1.0 (11.07.2026)**
 * Inititale Version.
