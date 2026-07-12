@@ -50,7 +50,7 @@ Kostenlos nutzbar. Keine Vorhersage des Regenradars möglich. Bilder im Abstand 
 
 Kostenpflichtig, bis 30000 Tiles pro Monat sind kostenlos. Vorhersage des Regenradars möglich. Es wird ein API-Zugang benötigt. Bilder im Abstand von 10 min.
 
-### MeteoSwiss Open Data
+### MeteoSwiss
 
 Kostenlos nutzbar. Radarbilder für die Schweiz. Bilder im Abstand von 5 min.
 
@@ -143,7 +143,7 @@ Feedback, Verbesserungsvorschläge und Pull Requests sind jederzeit willkommen.
 ## Versionen
 
 **Version 1.2 (13.07.2026)**
-* Neuer Radar-Provider 'Meteo Swiss Open Data' liefert Bilder im fünf Minuten Abstand, leider nur für die Schweiz.
+* Neuer Radar-Provider 'Meteo Swiss' liefert Bilder im fünf Minuten Abstand, leider nur für die Schweiz.
 * Vereinheitlichung der Farben über alle Radar-Provider und Anzeige der Regenmenge in Millimeter.
 * Radar Konfiguration vereinfacht
 * Diverse kleinere Anpassungen
