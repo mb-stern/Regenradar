@@ -133,7 +133,7 @@ class Regenradar extends IPSModuleStrict
                             'options' => [
                                 ['caption' => 'Rainviewer', 'value' => 'rainviewer'],
                                 ['caption' => 'Rainbow', 'value' => 'rainbow'],
-                                ['caption' => 'MeteoSwiss Open Data', 'value' => 'meteoswiss'],
+                                ['caption' => 'MeteoSwiss', 'value' => 'meteoswiss'],
                             ],
                         ],
                         ['type' => 'ValidationTextBox', 'name' => 'RainbowApiKey', 'caption' => 'Rainbow API-Key'],
