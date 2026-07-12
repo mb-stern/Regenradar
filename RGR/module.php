@@ -320,6 +320,7 @@ class Regenradar extends IPSModuleStrict
             height: var(--wr-legend-swatch-h);
             border: 1px solid var(--wr-border);
         }
+        #wr-legend .wr-legend-provider,
         #wr-legend .wr-legend-title {
             font-weight: 600;
             margin-bottom: calc(4px * var(--k));
@@ -1219,6 +1220,13 @@ function wrRenderLegend(legend) {
     box.style.display = 'block';
     box.innerHTML = '';
 
+    if (legend.provider) {
+        const provider = document.createElement('div');
+        provider.className = 'wr-legend-provider';
+        provider.textContent = legend.provider;
+        box.appendChild(provider);
+    }
+
     if (legend.title) {
         const title = document.createElement('div');
         title.className = 'wr-legend-title';
@@ -1719,11 +1727,19 @@ HTML;
 
     private function BuildRadarLegendPayload(): array
     {
+        $provider = $this->ReadPropertyString('RadarProvider');
+        $providerName = match ($provider) {
+            'rainbow' => 'Rainbow',
+            'meteoswiss' => 'MeteoSwiss',
+            default => 'RainViewer',
+        };
+
         // Für alle Provider dieselbe, leicht verständliche Niederschlagsskala.
         // Rainbow nutzt fest Palette 8 (RainViewer Universal Blue / Original).
         // RainViewer liefert dieses Schema bereits; MeteoSwiss wird im Browser entsprechend eingefärbt.
         return [
             'type' => 'entries',
+            'provider' => $providerName,
             'title' => 'Niederschlag (mm/h)',
             'entries' => [
                 ['color' => '#cec087', 'label' => '0,1 mm/h'],
