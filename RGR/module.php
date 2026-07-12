@@ -1826,8 +1826,17 @@ HTML;
         for ($daysBack = 0; $daysBack <= 2; $daysBack++) {
             $date = gmdate('Ymd', time() - ($daysBack * 86400));
             $url = 'https://data.geo.admin.ch/api/stac/v1/collections/' .
-                'ch.meteoschweiz.ogd-radar-precip/items/' . $date . '-ch';
-            $json = $this->HttpGet($url, ['Accept: application/geo+json, application/json'], 20);
+                'ch.meteoschweiz.ogd-radar-precip/items/' . $date . '-ch' .
+                '?_=' . time();
+            $json = $this->HttpGet(
+                $url,
+                [
+                    'Accept: application/geo+json, application/json',
+                    'Cache-Control: no-cache',
+                    'Pragma: no-cache'
+                ],
+                20
+            );
             $candidate = json_decode($json, true);
             if (is_array($candidate) && isset($candidate['assets']) && is_array($candidate['assets'])) {
                 $item = $candidate;
@@ -1878,9 +1887,17 @@ HTML;
             $frames = array_slice($frames, -12);
         }
 
+        $latestFrameTime = '-';
+        if (!empty($frames)) {
+            $latestFrame = $frames[count($frames) - 1];
+            $latestFrameTime = gmdate('H:i:s', (int) $latestFrame['time']) . ' UTC';
+        }
+
         $this->SendDebug(
             'BuildMeteoswissPayload',
-            'MeteoSwiss RZC Frames geladen: ' . count($frames) . ', Tagesitem=' . $itemDate,
+            'MeteoSwiss RZC Frames geladen: ' . count($frames) .
+            ', neuester Frame=' . $latestFrameTime .
+            ', Tagesitem=' . $itemDate,
             0
         );
 
