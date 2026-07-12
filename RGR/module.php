@@ -2,7 +2,6 @@
 
 class Regenradar extends IPSModuleStrict
 {
-    // Tile-Debug Mobile-Layout Fix v3 – sofortiger Radarabruf beim Öffnen
     public function Create(): void
     {
         parent::Create();
@@ -933,7 +932,17 @@ function wrShowFrame(index) {
     }
 
     let layer = wrRadarLayerCache[cacheKey] || null;
-    if (layer && wrConfig && wrConfig.showTileDebug) {
+
+    // Nur dann als Cache-Treffer anzeigen, wenn wirklich auf einen anderen,
+    // bereits vorhandenen Frame-Layer gewechselt wird.
+    //
+    // Beim ersten Öffnen wird der Initial-Frame aus WR_INITIAL aufgebaut und
+    // unmittelbar danach nochmals RefreshRadar ausgelöst. Dabei wird derselbe
+    // bereits sichtbare Layer erneut ausgewählt. Das ist kein echter
+    // Frame-Wechsel aus dem Cache und darf die laufenden Tile-Zähler nicht
+    // mit "(Cache)" überschreiben.
+    const isDifferentCachedLayer = layer && layer !== wrRadarLayer;
+    if (isDifferentCachedLayer && wrConfig && wrConfig.showTileDebug) {
         const frameLabel = frame.time ? new Date(Number(frame.time) * 1000).toLocaleTimeString() : '-';
         wrTileDebugStats = {
             frame: frameLabel + ' (Cache)',
