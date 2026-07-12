@@ -44,11 +44,15 @@ Das Modul wurde für Desktop, Tablet und Smartphone optimiert und legt besondere
 
 ### RainViewer
 
-Kostenlos nutzbar. Keine Vorhersage des Regenradars möglich.
+Kostenlos nutzbar. Keine Vorhersage des Regenradars möglich. Bilder im Abstand von 10 min.
 
-### Rainbow API
+### Rainbow
 
-Unterstützt verschiedene Layer und Farbpaletten. Vorhersage des Regenradars. Es wird ein API-Zugang benötigt. 30000 Tiles pro Monat sind kostenlos.
+Kostenpflichtig, bis 30000 Tiles pro Monat sind kostenlos. Vorhersage des Regenradars möglich. Es wird ein API-Zugang benötigt. Bilder im Abstand von 10 min.
+
+### MeteoSwiss Open Data
+
+Kostenlos nutzbar. Radarbilder für die Schweiz. Bilder im Abstand von 5 min.
 
 ---
 
