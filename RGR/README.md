@@ -95,7 +95,7 @@ Einstellbar sind
 
 * Radarprovider
 * Aktualisierungsintervall
-* Autoplay (Vorsicht insbesondere bei kostenpflichtiegen Zugängen wie Rainbow, könnte einen hohen Tile-Verschleiss zur Folge haben.)
+* Autoplay (Vorsicht bei kostenpflichtiegen Zugängen wie Rainbow, hat erhöhten Tile-Verschleiss zur Folge.)
 * Tile-Debug
 * Rainbow-Layer
 * Rainbow-Farbpalette
@@ -142,10 +142,17 @@ Feedback, Verbesserungsvorschläge und Pull Requests sind jederzeit willkommen.
 
 ## Versionen
 
+**Version 1.2 (13.07.2026)**
+* Neuer Radar-Provider 'Meteo Swiss Open Data' liefert Bilder im fünf Minuten Abstand, leider nur für die Schweiz.
+* Vereinheitlichung der Farben über alle Radar-Provider und Anzeige der Regenmenge in Millimeter.
+* Diverse kleinere Anpassungen
+
+
 **Version 1.1 (12.07.2026)**
 * Rückfall auf Location Control bei nicht oder nicht komplett konfigurierter OpenWeatherOneCall-Instanz.
 * Neuer Radar-Provider 'Meteo Swiss Open Data' liefert Bilder im fünf Minuten Abstand, leider nur für die Schweiz.
 * Vereinheitlichung der Farben über alle Radar-Provider und Anzeige der Regenmenge in Millimeter.
+* Diverse kleinere Anpassungen
 
 
 **Version 1.0 (11.07.2026)**
