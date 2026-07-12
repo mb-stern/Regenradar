@@ -24,6 +24,8 @@ class Regenradar extends IPSModuleStrict
 
         // Gemerkte Variablen, auf deren VM_UPDATE die Wetter-/Forecast-Anzeige sofort aktualisiert wird.
         $this->RegisterAttributeString('WeatherWatchIDs', '[]');
+        // Signatur des zuletzt an die Visualisierung übertragenen neuesten Radarframes.
+        $this->RegisterAttributeString('LastRadarFrameSignature', '');
 
         // HTML-SDK aktivieren. 1 = individuelle Darstellung via HTML-SDK.
         $this->SetVisualizationType(1);
@@ -147,7 +149,7 @@ class Regenradar extends IPSModuleStrict
                                 ['caption' => 'Radars', 'value' => 'radars'],
                             ],
                         ],
-                        ['type' => 'NumberSpinner', 'name' => 'RadarRefreshSeconds', 'caption' => 'Auf neue Radarbilder prüfen alle Sekunden', 'minimum' => 60],
+                        ['type' => 'NumberSpinner', 'name' => 'RadarRefreshSeconds', 'caption' => 'Radar aktualisieren alle Sekunden', 'minimum' => 60],
                         ['type' => 'CheckBox', 'name' => 'EnableAutoplay', 'caption' => 'Autoplay aktivieren'],
                         ['type' => 'CheckBox', 'name' => 'ShowTileDebug', 'caption' => 'Tile-Debug im HTML anzeigen'],
                     ],
@@ -704,7 +706,7 @@ let wrLastRadarRequestAt = 0;
 let wrRadarLayerCache = {};
 let wrRadarObjectUrlCache = {};
 let wrH5ReadyPromise = null;
-let wrTileDebugStats = { frame: '-', provider: '-', started: 0, loaded: 0, errors: 0, complete: false };
+let wrTileDebugStats = { frame: '-', provider: '-', source: '-', started: 0, loaded: 0, errors: 0, complete: false };
 const WR_ANIMATION_DELAY_MS = 1000;
 const wrPlaySvg = '<svg viewBox="0 0 24 24"><path d="M8 5l12 7-12 7V5z"/></svg>';
 const wrPauseSvg = '<svg viewBox="0 0 24 24"><path d="M8 5h3v14H8V5zm5 0h3v14h-3V5z"/></svg>';
@@ -807,6 +809,7 @@ function wrUpdateTileDebug() {
         '<div class="wr-debug-title">Tile-Debug</div>' +
         '<div class="wr-debug-line">Provider: ' + wrEscapeHtml(wrTileDebugStats.provider) + '</div>' +
         '<div class="wr-debug-line">Frame: ' + wrEscapeHtml(wrTileDebugStats.frame) + '</div>' +
+        '<div class="wr-debug-line">Quelle: ' + wrEscapeHtml(wrTileDebugStats.source || '-') + '</div>' +
         '<div class="wr-debug-line">Start: ' + wrTileDebugStats.started + '</div>' +
         '<div class="wr-debug-line">Geladen: ' + wrTileDebugStats.loaded + '</div>' +
         '<div class="wr-debug-line">Fehler: ' + wrTileDebugStats.errors + '</div>' +
@@ -820,6 +823,7 @@ function wrAttachTileDebug(layer, frame, layerType) {
     wrTileDebugStats = {
         frame: frameLabel,
         provider: wrRadarPayload && wrRadarPayload.provider ? wrRadarPayload.provider : '-',
+        source: layerType === 'image' ? 'Neu geladen (HDF5 → PNG)' : 'Neu angefordert',
         started: 0,
         loaded: 0,
         errors: 0,
@@ -959,6 +963,8 @@ async function wrBuildMeteoswissImage(frame, layer, cacheKey) {
         });
         const objectUrl = URL.createObjectURL(blob);
         wrRadarObjectUrlCache[cacheKey] = objectUrl;
+        wrTileDebugStats.source = 'Neu geladen (HDF5 → PNG)';
+        wrUpdateTileDebug();
         layer.setUrl(objectUrl);
     } catch (e) {
         wrTileDebugStats.errors++;
@@ -1000,6 +1006,9 @@ function wrBuildRadarLayer(frame) {
         wrAttachTileDebug(layer, frame, 'image');
         const key = wrRadarCacheKey(frame);
         if (wrRadarObjectUrlCache[key]) {
+            wrTileDebugStats.source = 'PNG-Cache';
+            wrTileDebugStats.complete = true;
+            wrUpdateTileDebug();
             layer.setUrl(wrRadarObjectUrlCache[key]);
         } else {
             wrBuildMeteoswissImage(frame, layer, key);
@@ -1075,6 +1084,7 @@ function wrShowFrame(index) {
         wrTileDebugStats = {
             frame: frameLabel + ' (Cache)',
             provider: wrRadarPayload && wrRadarPayload.provider ? wrRadarPayload.provider : '-',
+            source: 'JavaScript-Layer-Cache',
             started: 0,
             loaded: 0,
             errors: 0,
@@ -1563,13 +1573,28 @@ HTML;
 
     public function UpdateRadar(): void
     {
+        $provider = $this->ReadPropertyString('RadarProvider');
+        $payload = $this->BuildRadarPayload();
+        $signature = $this->BuildRadarFrameSignature($payload);
+        $previousSignature = $this->ReadAttributeString('LastRadarFrameSignature');
+
+        $cacheState = 'keine Frames';
+        if ($signature !== '') {
+            if ($signature === $previousSignature) {
+                $cacheState = 'unverändert – vorhandene Browser-Layer werden aus dem Cache verwendet';
+            } else {
+                $cacheState = 'neuer Frame – nur neue Tiles bzw. HDF5-Daten werden geladen';
+                $this->WriteAttributeString('LastRadarFrameSignature', $signature);
+            }
+        }
+
         $this->SendDebug(
             'UpdateRadar',
-            'Radar-Aktualisierung gestartet. Provider=' . $this->ReadPropertyString('RadarProvider'),
+            'Provider=' . $provider . ', Status=' . $cacheState,
             0
         );
 
-        $this->SendVisualizationMessage('radar', $this->BuildRadarPayload());
+        $this->SendVisualizationMessage('radar', $payload);
     }
 
     public function ReloadHtml(): void
@@ -1769,6 +1794,23 @@ HTML;
         return $forecast;
     }
 
+    private function BuildRadarFrameSignature(array $payload): string
+    {
+        $frames = $payload['frames'] ?? [];
+        if (!is_array($frames) || count($frames) === 0) {
+            return '';
+        }
+
+        $latest = $frames[count($frames) - 1];
+        if (!is_array($latest)) {
+            return '';
+        }
+
+        return (string) ($payload['provider'] ?? '') . '|' .
+            (string) ($latest['time'] ?? '') . '|' .
+            (string) ($latest['url'] ?? ($latest['path'] ?? ''));
+    }
+
     private function BuildRadarPayload(): array
     {
         $provider = $this->ReadPropertyString('RadarProvider');
@@ -1819,72 +1861,62 @@ HTML;
 
     private function BuildMeteoswissPayload(): array
     {
-        $frames = [];
+        $item = null;
         $itemDate = '';
 
-        // Die Tages-Items werden in UTC geführt. Bei jedem Poll wird der aktuelle
-        // STAC-Inhalt cachefrei neu abgefragt. Erst abbrechen, wenn im Item
-        // tatsächlich passende RZC-Radarframes gefunden wurden.
+        // Die Tages-Items werden in UTC geführt. Rund um Mitternacht beide Tage prüfen.
         for ($daysBack = 0; $daysBack <= 2; $daysBack++) {
             $date = gmdate('Ymd', time() - ($daysBack * 86400));
             $url = 'https://data.geo.admin.ch/api/stac/v1/collections/' .
                 'ch.meteoschweiz.ogd-radar-precip/items/' . $date . '-ch' .
-                '?_=' . rawurlencode((string) microtime(true));
-
+                '?_=' . time();
             $json = $this->HttpGet(
                 $url,
                 [
                     'Accept: application/geo+json, application/json',
-                    'Cache-Control: no-cache, no-store, max-age=0',
+                    'Cache-Control: no-cache',
                     'Pragma: no-cache'
                 ],
                 20
             );
-
-            $item = json_decode($json, true);
-            if (!is_array($item) || !isset($item['assets']) || !is_array($item['assets'])) {
-                continue;
+            $candidate = json_decode($json, true);
+            if (is_array($candidate) && isset($candidate['assets']) && is_array($candidate['assets'])) {
+                $item = $candidate;
+                $itemDate = $date;
+                break;
             }
-
-            $candidateFrames = [];
-            foreach ($item['assets'] as $name => $asset) {
-                if (!is_string($name) || !preg_match('/^rzc(\d{2})(\d{3})(\d{2})(\d{2}).*\.h5$/i', $name, $match)) {
-                    continue;
-                }
-                if (!is_array($asset) || empty($asset['href'])) {
-                    continue;
-                }
-
-                $year = 2000 + (int) $match[1];
-                $dayOfYear = max(1, (int) $match[2]);
-                $hour = min(23, (int) $match[3]);
-                $minute = min(59, (int) $match[4]);
-                $base = gmmktime(0, 0, 0, 1, 1, $year);
-                $timestamp = $base + (($dayOfYear - 1) * 86400) + ($hour * 3600) + ($minute * 60);
-
-                $candidateFrames[] = [
-                    'time' => $timestamp,
-                    'url' => (string) $asset['href'],
-                    // Gesamtes RZC-Raster; wird im Browser von LV95 nach WGS84 umgerechnet.
-                    'bounds' => [[43.619, 2.68942], [49.3744, 12.4623]]
-                ];
-            }
-
-            if ($candidateFrames === []) {
-                continue;
-            }
-
-            $frames = $candidateFrames;
-            $itemDate = $date;
-            break;
         }
 
-        if ($frames === []) {
-            $this->SendDebug('BuildMeteoswissPayload', 'Keine aktuellen MeteoSwiss-RZC-Frames gefunden.', 0);
+        if (!is_array($item)) {
+            $this->SendDebug('BuildMeteoswissPayload', 'Kein aktuelles MeteoSwiss-STAC-Tagesitem gefunden.', 0);
             return [
                 'provider' => 'meteoswiss',
                 'frames' => [],
                 'error' => 'MeteoSwiss-Daten nicht erreichbar'
+            ];
+        }
+
+        $frames = [];
+        foreach ($item['assets'] as $name => $asset) {
+            if (!is_string($name) || !preg_match('/^rzc(\d{2})(\d{3})(\d{2})(\d{2}).*\.h5$/i', $name, $match)) {
+                continue;
+            }
+            if (!is_array($asset) || empty($asset['href'])) {
+                continue;
+            }
+
+            $year = 2000 + (int) $match[1];
+            $dayOfYear = max(1, (int) $match[2]);
+            $hour = min(23, (int) $match[3]);
+            $minute = min(59, (int) $match[4]);
+            $base = gmmktime(0, 0, 0, 1, 1, $year);
+            $timestamp = $base + (($dayOfYear - 1) * 86400) + ($hour * 3600) + ($minute * 60);
+
+            $frames[] = [
+                'time' => $timestamp,
+                'url' => (string) $asset['href'],
+                // Gesamtes RZC-Raster; wird im Browser von LV95 nach WGS84 umgerechnet.
+                'bounds' => [[43.619, 2.68942], [49.3744, 12.4623]]
             ];
         }
 
@@ -1897,8 +1929,11 @@ HTML;
             $frames = array_slice($frames, -12);
         }
 
-        $latestFrame = $frames[count($frames) - 1];
-        $latestFrameTime = gmdate('H:i:s', (int) $latestFrame['time']) . ' UTC';
+        $latestFrameTime = '-';
+        if (!empty($frames)) {
+            $latestFrame = $frames[count($frames) - 1];
+            $latestFrameTime = gmdate('H:i:s', (int) $latestFrame['time']) . ' UTC';
+        }
 
         $this->SendDebug(
             'BuildMeteoswissPayload',
