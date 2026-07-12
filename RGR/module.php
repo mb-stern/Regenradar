@@ -15,7 +15,7 @@ class Regenradar extends IPSModuleStrict
         $this->RegisterPropertyString('RadarProvider', 'rainviewer');
         $this->RegisterPropertyString('RainbowApiKey', '');
         $this->RegisterPropertyString('RainbowLayer', 'precip');
-        $this->RegisterPropertyInteger('RadarRefreshSeconds', 600);
+        $this->RegisterPropertyInteger('RadarRefreshSeconds', 60);
         $this->RegisterPropertyBoolean('EnableAutoplay', false);
         $this->RegisterPropertyBoolean('ShowTileDebug', false);
         $this->RegisterPropertyInteger('Zoom', 7);
