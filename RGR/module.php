@@ -89,7 +89,7 @@ class Regenradar extends IPSModuleStrict
                     'items' => [
                         [
                             'type'    => 'Label',
-                            'caption' => "Das Modul erfordert eine installierte OpenWeatherOneCall Instanz. Bitte installieren Sie das Modul und legen Sie eine Instanz an."
+                            'caption' => "Die OpenWeatherOneCall Instanz ist optional. Für Wetterdaten wird sie benötigt; für den Kartenstandort wird bei fehlender Auswahl oder fehlenden Koordinaten automatisch die Symcon-Location-Instanz verwendet."
                         ],
                         [
                             'type' => 'SelectObject',
@@ -1827,22 +1827,125 @@ HTML;
 
     private function GetLocation(): array
     {
+        // 1. Bevorzugt den in OpenWeatherOneCall konfigurierten Standort verwenden.
         $owmInstID = $this->ReadPropertyInteger('OpenWeatherInstanceID');
         if ($owmInstID > 0 && @IPS_ObjectExists($owmInstID)) {
             $locationJson = @IPS_GetProperty($owmInstID, 'location');
             $location = json_decode((string) $locationJson, true);
-            if (is_array($location) && isset($location['latitude'], $location['longitude'])) {
-                return [(float) $location['latitude'], (float) $location['longitude']];
+
+            if ($this->HasValidCoordinates($location)) {
+                $latitude = (float) $location['latitude'];
+                $longitude = (float) $location['longitude'];
+
+                $this->SendDebug(
+                    'GetLocation',
+                    'Standort aus OpenWeatherOneCall verwendet: ' . $latitude . ', ' . $longitude,
+                    0
+                );
+
+                return [$latitude, $longitude];
             }
+
+            $this->SendDebug(
+                'GetLocation',
+                'OpenWeatherOneCall ist ausgewählt, enthält aber keine gültigen Koordinaten. Fallback auf Symcon Location.',
+                0
+            );
+        } else {
+            $this->SendDebug(
+                'GetLocation',
+                'Keine OpenWeatherOneCall-Instanz ausgewählt. Fallback auf Symcon Location.',
+                0
+            );
+        }
+
+        // 2. Fallback: Standort aus der Symcon-Core-Instanz "Location" ermitteln.
+        foreach (@IPS_GetInstanceList() ?: [] as $instanceID) {
+            if (!@IPS_ObjectExists($instanceID)) {
+                continue;
+            }
+
+            $instance = @IPS_GetInstance($instanceID);
+            $moduleName = strtolower((string) ($instance['ModuleInfo']['ModuleName'] ?? ''));
+            $objectName = strtolower((string) @IPS_GetName($instanceID));
+
+            // Nur die Symcon Location-/Location-Control-Instanz berücksichtigen.
+            $isLocationInstance =
+                str_contains($moduleName, 'location control') ||
+                $moduleName === 'location' ||
+                $objectName === 'location' ||
+                $objectName === 'standort';
+
+            if (!$isLocationInstance) {
+                continue;
+            }
+
+            $configurationJson = @IPS_GetConfiguration($instanceID);
+            $configuration = json_decode((string) $configurationJson, true);
+            if (!is_array($configuration)) {
+                continue;
+            }
+
+            // Property-Namen unabhängig von Gross-/Kleinschreibung behandeln.
+            $normalized = [];
+            foreach ($configuration as $key => $value) {
+                $normalized[strtolower((string) $key)] = $value;
+            }
+
+            $location = [
+                'latitude'  => $normalized['latitude'] ?? null,
+                'longitude' => $normalized['longitude'] ?? null
+            ];
+
+            if (!$this->HasValidCoordinates($location)) {
+                continue;
+            }
+
+            $latitude = (float) $location['latitude'];
+            $longitude = (float) $location['longitude'];
+
+            $this->SendDebug(
+                'GetLocation',
+                'Standort aus Symcon Location verwendet (ID ' . $instanceID . '): ' .
+                $latitude . ', ' . $longitude,
+                0
+            );
+
+            return [$latitude, $longitude];
         }
 
         $this->SendDebug(
             'GetLocation',
-            'Keine gültigen Koordinaten in der OpenWeatherOneCall-Instanz gefunden. OpenWeatherInstanceID=' . $owmInstID,
+            'Weder in OpenWeatherOneCall noch in der Symcon-Location-Instanz wurden gültige Koordinaten gefunden.',
             0
         );
 
         return [0.0, 0.0];
+    }
+
+    private function HasValidCoordinates(mixed $location): bool
+    {
+        if (!is_array($location)) {
+            return false;
+        }
+
+        if (!array_key_exists('latitude', $location) || !array_key_exists('longitude', $location)) {
+            return false;
+        }
+
+        if (!is_numeric($location['latitude']) || !is_numeric($location['longitude'])) {
+            return false;
+        }
+
+        $latitude = (float) $location['latitude'];
+        $longitude = (float) $location['longitude'];
+
+        if ($latitude < -90.0 || $latitude > 90.0 || $longitude < -180.0 || $longitude > 180.0) {
+            return false;
+        }
+
+        // 0/0 ist in diesem Modul kein sinnvoll konfigurierter Standort.
+        return !($latitude === 0.0 && $longitude === 0.0);
     }
 
     private function GetMapStyle(): array
