@@ -15,6 +15,7 @@ class Regenradar extends IPSModuleStrict
         $this->RegisterPropertyString('RadarProvider', 'rainviewer');
         $this->RegisterPropertyString('RainbowApiKey', '');
         $this->RegisterPropertyString('RainbowLayer', 'precip');
+        $this->RegisterPropertyInteger('RainbowColor', 5);
         $this->RegisterPropertyInteger('RadarRefreshSeconds', 600);
         $this->RegisterPropertyBoolean('EnableAutoplay', false);
         $this->RegisterPropertyBoolean('ShowTileDebug', false);
@@ -147,6 +148,24 @@ class Regenradar extends IPSModuleStrict
                                 ['caption' => 'Radars', 'value' => 'radars'],
                             ],
                         ],
+                       [
+                        'type' => 'Select',
+                        'name' => 'RainbowColor',
+                        'caption' => 'Farbpalette',
+                        'options' => 
+                        [
+                            ['caption' => '0 - Rainbow', 'value' => 0],
+                            ['caption' => '1 - TWC', 'value' => 1],
+                            ['caption' => '2 - Dark Sky', 'value' => 2],
+                            ['caption' => '3 - Meteored', 'value' => 3],
+                            ['caption' => '4 - Nexrad', 'value' => 4],
+                            ['caption' => '5 - Rainviewer', 'value' => 5],
+                            ['caption' => '6 - Selex', 'value' => 6],
+                            ['caption' => '7 - Titan', 'value' => 7],
+                            ['caption' => '8 - Rainviewer Universal Blue', 'value' => 8],
+                            ['caption' => '9 - Rainviewer TWC', 'value' => 9],
+                        ]
+                    ],
                         ['type' => 'NumberSpinner', 'name' => 'RadarRefreshSeconds', 'caption' => 'Radar aktualisieren alle Sekunden', 'minimum' => 60],
                         ['type' => 'CheckBox', 'name' => 'EnableAutoplay', 'caption' => 'Autoplay aktivieren'],
                         ['type' => 'CheckBox', 'name' => 'ShowTileDebug', 'caption' => 'Tile-Debug im HTML anzeigen'],
@@ -883,15 +902,17 @@ function wrLv95FromWgs84(lat, lon) {
 }
 
 function wrMeteoswissColor(value) {
-    // Einheitliches Farbschema: RainViewer "Original" / Rainbow Palette 8.
-    // Die Schwellen entsprechen der RainViewer-Legende in mm/h.
-    if (!Number.isFinite(value) || value < 0.1) return [0, 0, 0, 0];
-    if (value < 0.5)  return [206, 192, 135, 150]; // 0.1 mm/h
-    if (value < 2.5)  return [0, 163, 224, 255];   // 0.5 mm/h
-    if (value < 10.0) return [0, 85, 136, 255];    // 2.5 mm/h
-    if (value < 50.0) return [255, 170, 0, 255];   // 10 mm/h
-    if (value < 70.0) return [193, 0, 0, 255];     // 50 mm/h
-    return [255, 119, 255, 255];                   // > 50 mm/h
+    if (!Number.isFinite(value) || value <= 0.05) return [0, 0, 0, 0];
+    if (value < 0.2)  return [179, 217, 255, 115];
+    if (value < 0.5)  return [102, 178, 255, 135];
+    if (value < 1.0)  return [51, 153, 255, 150];
+    if (value < 2.0)  return [0, 102, 255, 165];
+    if (value < 5.0)  return [0, 204, 102, 180];
+    if (value < 10.0) return [255, 230, 0, 195];
+    if (value < 20.0) return [255, 153, 0, 210];
+    if (value < 40.0) return [230, 51, 0, 225];
+    if (value < 70.0) return [179, 0, 179, 235];
+    return [255, 102, 255, 245];
 }
 
 async function wrBuildMeteoswissImage(frame, layer, cacheKey) {
@@ -1689,19 +1710,60 @@ HTML;
 
     private function BuildRadarLegendPayload(): array
     {
-        // Für alle Provider dieselbe, leicht verständliche Niederschlagsskala.
-        // Rainbow nutzt fest Palette 8 (RainViewer Universal Blue / Original).
-        // RainViewer liefert dieses Schema bereits; MeteoSwiss wird im Browser entsprechend eingefärbt.
+        $provider = $this->ReadPropertyString('RadarProvider');
+
+        if ($provider === 'rainbow') {
+            $color = min(max(0, $this->ReadPropertyInteger('RainbowColor')), 9);
+            $palettes = [
+                0 => ['name' => 'Rainbow', 'image' => 'rainbow_rain.png'],
+                1 => ['name' => 'TWC', 'image' => 'twc_rain.png'],
+                2 => ['name' => 'Dark Sky', 'image' => 'dark_sky_rain.png'],
+                3 => ['name' => 'Meteored', 'image' => 'meteored_rain.png'],
+                4 => ['name' => 'NEXRAD', 'image' => 'nexrad_rain.png'],
+                5 => ['name' => 'Rainviewer', 'image' => 'rainviewer_rain.png'],
+                6 => ['name' => 'SELEX-IS', 'image' => 'selex_rain.png'],
+                7 => ['name' => 'TITAN', 'image' => 'titan_rain.png'],
+                8 => ['name' => 'Universal Blue', 'image' => 'universal_blue_rain.png'],
+                9 => ['name' => 'Rainviewer TWC', 'image' => 'twc_rv_rain.png'],
+            ];
+
+            $palette = $palettes[$color] ?? $palettes[0];
+
+            return [
+                'type' => 'image',
+                'title' => 'Rainbow ' . $color . ' - ' . $palette['name'],
+                'image' => 'https://doc.rainbow.ai/images/palletes/' . $palette['image'],
+                'note' => 'offizielle Rainbow-Rain-Palette'
+            ];
+        }
+
+        if ($provider === 'meteoswiss') {
+            return [
+                'type' => 'entries',
+                'title' => 'MeteoSwiss Niederschlag (mm/h)',
+                'entries' => [
+                    ['color' => '#b3d9ff', 'label' => '0.05–0.2'],
+                    ['color' => '#3399ff', 'label' => '0.5–1'],
+                    ['color' => '#0066ff', 'label' => '1–2'],
+                    ['color' => '#00cc66', 'label' => '2–5'],
+                    ['color' => '#ffe600', 'label' => '5–10'],
+                    ['color' => '#ff9900', 'label' => '10–20'],
+                    ['color' => '#e63300', 'label' => '20–40'],
+                    ['color' => '#b300b3', 'label' => '> 40'],
+                ]
+            ];
+        }
+
+        // RainViewer: keine Auswahl mehr; Standard-Legende passend zur festen Tile-URL /2/1_1.png.
         return [
             'type' => 'entries',
-            'title' => 'Niederschlag (mm/h)',
+            'title' => 'RainViewer Standard',
             'entries' => [
-                ['color' => '#cec087', 'label' => '0,1 mm/h'],
-                ['color' => '#00a3e0', 'label' => '0,5 mm/h'],
-                ['color' => '#005588', 'label' => '2,5 mm/h'],
-                ['color' => '#ffaa00', 'label' => '10 mm/h'],
-                ['color' => '#c10000', 'label' => '50 mm/h'],
-                ['color' => '#ff77ff', 'label' => '> 50 mm/h'],
+                ['color' => '#b3d9ff', 'label' => 'Sehr leicht'],
+                ['color' => '#3399ff', 'label' => 'Leicht'],
+                ['color' => '#0066ff', 'label' => 'Mäßig'],
+                ['color' => '#cc3300', 'label' => 'Stark'],
+                ['color' => '#990099', 'label' => 'Extrem'],
             ]
         ];
     }
@@ -1826,17 +1888,8 @@ HTML;
         for ($daysBack = 0; $daysBack <= 2; $daysBack++) {
             $date = gmdate('Ymd', time() - ($daysBack * 86400));
             $url = 'https://data.geo.admin.ch/api/stac/v1/collections/' .
-                'ch.meteoschweiz.ogd-radar-precip/items/' . $date . '-ch' .
-                '?_=' . time();
-            $json = $this->HttpGet(
-                $url,
-                [
-                    'Accept: application/geo+json, application/json',
-                    'Cache-Control: no-cache',
-                    'Pragma: no-cache'
-                ],
-                20
-            );
+                'ch.meteoschweiz.ogd-radar-precip/items/' . $date . '-ch';
+            $json = $this->HttpGet($url, ['Accept: application/geo+json, application/json'], 20);
             $candidate = json_decode($json, true);
             if (is_array($candidate) && isset($candidate['assets']) && is_array($candidate['assets'])) {
                 $item = $candidate;
@@ -1887,17 +1940,9 @@ HTML;
             $frames = array_slice($frames, -12);
         }
 
-        $latestFrameTime = '-';
-        if (!empty($frames)) {
-            $latestFrame = $frames[count($frames) - 1];
-            $latestFrameTime = gmdate('H:i:s', (int) $latestFrame['time']) . ' UTC';
-        }
-
         $this->SendDebug(
             'BuildMeteoswissPayload',
-            'MeteoSwiss RZC Frames geladen: ' . count($frames) .
-            ', neuester Frame=' . $latestFrameTime .
-            ', Tagesitem=' . $itemDate,
+            'MeteoSwiss RZC Frames geladen: ' . count($frames) . ', Tagesitem=' . $itemDate,
             0
         );
 
@@ -1913,7 +1958,7 @@ HTML;
     {
         $apiKey = trim($this->ReadPropertyString('RainbowApiKey'));
         $layer = $this->ReadPropertyString('RainbowLayer');
-        $color = 8; // RainViewer Universal Blue / Original
+        $color = min(max(0, $this->ReadPropertyInteger('RainbowColor')), 9);
 
         if ($apiKey === '') {
             $this->SendDebug(
