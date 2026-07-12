@@ -44,11 +44,11 @@ Das Modul wurde für Desktop, Tablet und Smartphone optimiert und legt besondere
 
 ### RainViewer
 
-Kostenlos nutzbar.
+Kostenlos nutzbar. Keine Vorhersage des Regenradars möglich.
 
 ### Rainbow API
 
-Unterstützt verschiedene Layer und Farbpaletten.
+Unterstützt verschiedene Layer und Farbpaletten. Vorhersage des Regenradars. Es wird ein API-Zugang benötigt. 30000 Tiles pro Monat sind kostenlos.
 
 ---
 
@@ -68,9 +68,8 @@ Dadurch entstehen keine regelmäßigen Radarabrufe, wenn die Visualisierung nich
 
 ## Voraussetzungen
 
-* IP-Symcon 8.x oder neuer
-* OpenWeather OneCall Modul
-* Internetverbindung für Radar- und Kartendaten
+* IP-Symcon 8.2 oder neuer
+* OpenWeather OneCall Modul (für die Wettervorhersage und Anzeige der Istwerte ohne Wetterstation)
 
 ---
 
@@ -91,8 +90,8 @@ oder
 Einstellbar sind
 
 * Radarprovider
-* Aktualisierungsintervall
-* Autoplay
+* Aktualisierungsintervall (bei allen Providern werden maximum alle 600sec (10min) neue Tiles geliefert.)
+* Autoplay (Vorsicht insbesondere bei kostenpflichtiegen Zugängen wie Rainbow, könnte einen hohen Tile-Verschleiss zur Folge haben.)
 * Tile-Debug
 * Rainbow-Layer
 * Rainbow-Farbpalette
