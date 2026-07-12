@@ -15,7 +15,7 @@ class Regenradar extends IPSModuleStrict
         $this->RegisterPropertyString('RadarProvider', 'rainviewer');
         $this->RegisterPropertyString('RainbowApiKey', '');
         $this->RegisterPropertyString('RainbowLayer', 'precip');
-        $this->RegisterPropertyInteger('RadarRefreshSeconds', 60);
+        $this->RegisterPropertyInteger('RadarRefreshSeconds', 600);
         $this->RegisterPropertyBoolean('EnableAutoplay', false);
         $this->RegisterPropertyBoolean('ShowTileDebug', false);
         $this->RegisterPropertyInteger('Zoom', 7);
@@ -705,8 +705,9 @@ let wrRadarRefreshTimer = null;
 let wrLastRadarRequestAt = 0;
 let wrRadarLayerCache = {};
 let wrRadarObjectUrlCache = {};
+let wrRadarLoadedAtCache = {};
 let wrH5ReadyPromise = null;
-let wrTileDebugStats = { frame: '-', provider: '-', source: '-', started: 0, loaded: 0, errors: 0, complete: false };
+let wrTileDebugStats = { frame: '-', provider: '-', source: '-', loadedAt: '-', started: 0, loaded: 0, errors: 0, complete: false };
 const WR_ANIMATION_DELAY_MS = 1000;
 const wrPlaySvg = '<svg viewBox="0 0 24 24"><path d="M8 5l12 7-12 7V5z"/></svg>';
 const wrPauseSvg = '<svg viewBox="0 0 24 24"><path d="M8 5h3v14H8V5zm5 0h3v14h-3V5z"/></svg>';
@@ -810,13 +811,14 @@ function wrUpdateTileDebug() {
         '<div class="wr-debug-line">Provider: ' + wrEscapeHtml(wrTileDebugStats.provider) + '</div>' +
         '<div class="wr-debug-line">Frame: ' + wrEscapeHtml(wrTileDebugStats.frame) + '</div>' +
         '<div class="wr-debug-line">Quelle: ' + wrEscapeHtml(wrTileDebugStats.source || '-') + '</div>' +
+        '<div class="wr-debug-line">Geladen um: ' + wrEscapeHtml(wrTileDebugStats.loadedAt || '-') + '</div>' +
         '<div class="wr-debug-line">Start: ' + wrTileDebugStats.started + '</div>' +
         '<div class="wr-debug-line">Geladen: ' + wrTileDebugStats.loaded + '</div>' +
         '<div class="wr-debug-line">Fehler: ' + wrTileDebugStats.errors + '</div>' +
         '<div class="wr-debug-line">Status: ' + (wrTileDebugStats.complete ? 'vollständig' : 'lädt') + '</div>';
 }
 
-function wrAttachTileDebug(layer, frame, layerType) {
+function wrAttachTileDebug(layer, frame, layerType, cacheKey) {
     if (!layer || !frame) return layer;
 
     const frameLabel = frame.time ? new Date(Number(frame.time) * 1000).toLocaleTimeString() : '-';
@@ -824,6 +826,7 @@ function wrAttachTileDebug(layer, frame, layerType) {
         frame: frameLabel,
         provider: wrRadarPayload && wrRadarPayload.provider ? wrRadarPayload.provider : '-',
         source: layerType === 'image' ? 'Neu geladen (HDF5 → PNG)' : 'Neu angefordert',
+        loadedAt: '-',
         started: 0,
         loaded: 0,
         errors: 0,
@@ -835,7 +838,10 @@ function wrAttachTileDebug(layer, frame, layerType) {
         wrTileDebugStats.started = 1;
         wrUpdateTileDebug();
         layer.on('load', function() {
+            const loadedAt = new Date().toLocaleTimeString();
+            if (cacheKey) wrRadarLoadedAtCache[cacheKey] = loadedAt;
             wrTileDebugStats.loaded = 1;
+            wrTileDebugStats.loadedAt = loadedAt;
             wrTileDebugStats.complete = true;
             wrUpdateTileDebug();
         });
@@ -861,6 +867,9 @@ function wrAttachTileDebug(layer, frame, layerType) {
         wrUpdateTileDebug();
     });
     layer.on('load', function() {
+        const loadedAt = new Date().toLocaleTimeString();
+        if (cacheKey) wrRadarLoadedAtCache[cacheKey] = loadedAt;
+        wrTileDebugStats.loadedAt = loadedAt;
         wrTileDebugStats.complete = true;
         wrUpdateTileDebug();
     });
@@ -977,6 +986,7 @@ async function wrBuildMeteoswissImage(frame, layer, cacheKey) {
 function wrBuildRadarLayer(frame) {
     if (!wrRadarPayload || !frame) return null;
 
+    const cacheKey = wrRadarCacheKey(frame);
     let layer = null;
 
     if (wrRadarPayload.provider === 'rainviewer') {
@@ -1016,7 +1026,7 @@ function wrBuildRadarLayer(frame) {
         return layer;
     }
 
-    return wrAttachTileDebug(layer, frame, 'tile');
+    return wrAttachTileDebug(layer, frame, 'tile', cacheKey);
 }
 
 function wrRadarCacheKey(frame) {
@@ -1052,6 +1062,7 @@ function wrPruneRadarLayerCache(validKeys) {
                 try { URL.revokeObjectURL(wrRadarObjectUrlCache[key]); } catch(e) {}
                 delete wrRadarObjectUrlCache[key];
             }
+            delete wrRadarLoadedAtCache[key];
         }
     }
 }
@@ -1085,6 +1096,7 @@ function wrShowFrame(index) {
             frame: frameLabel + ' (Cache)',
             provider: wrRadarPayload && wrRadarPayload.provider ? wrRadarPayload.provider : '-',
             source: 'JavaScript-Layer-Cache',
+            loadedAt: wrRadarLoadedAtCache[cacheKey] || '-',
             started: 0,
             loaded: 0,
             errors: 0,
@@ -1140,6 +1152,7 @@ function wrClearRadarLayers() {
         }
     }
     wrRadarObjectUrlCache = {};
+    wrRadarLoadedAtCache = {};
     wrRadarLayer = null;
 }
 
@@ -1303,6 +1316,8 @@ function wrInitMap(config) {
 function wrRenderRadar(payload) {
     if (!payload || !wrMap) return;
 
+    // Bei einer laufenden Animation den Zustand über das Radar-Update hinweg erhalten.
+    const wasPlaying = wrAnimationTimer !== null;
     wrStopAnimation();
     wrRadarPayload = payload;
 
@@ -1342,7 +1357,9 @@ function wrRenderRadar(payload) {
 
     wrShowFrame(wrFrameIndex);
 
-    if (wrConfig && wrConfig.enableAutoplay) {
+    // Konfiguriertes Autoplay startet initial automatisch. Wurde die Animation
+    // manuell gestartet, läuft sie nach einem Poll ebenfalls weiter.
+    if (wasPlaying || (wrConfig && wrConfig.enableAutoplay)) {
         wrPlayAnimation();
     }
 }
@@ -1567,6 +1584,7 @@ HTML;
 
     public function UpdateWeather(): void
     {
+        $this->SendDebug('UpdateWeather', 'Wetter-Aktualisierung gestartet', 0);
         $this->SendVisualizationMessage('weather', $this->BuildWeatherPayload());
     }
 
