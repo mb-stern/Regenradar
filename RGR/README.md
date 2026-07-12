@@ -139,7 +139,7 @@ Feedback, Verbesserungsvorschläge und Pull Requests sind jederzeit willkommen.
 ## Versionen
 
 **Version 1.1 (12.07.2026)**
-* Rückfall auf Location Control von Symcon bei nicht konfigurierter OpenWeatherOneCall-Instanz.
+* Rückfall auf Location Control bei nicht oder nicht komplett konfigurierter OpenWeatherOneCall-Instanz.
 
 
 **Version 1.0 (11.07.2026)**
