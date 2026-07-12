@@ -2,7 +2,6 @@
 
 class Regenradar extends IPSModuleStrict
 {
-    // Tile-Debug Mobile-Layout Fix v3 – sofortiger Radarabruf beim Öffnen
     public function Create(): void
     {
         parent::Create();
@@ -89,7 +88,7 @@ class Regenradar extends IPSModuleStrict
                     'items' => [
                         [
                             'type'    => 'Label',
-                            'caption' => "Das Modul erfordert eine installierte OpenWeatherOneCall Instanz. Bitte installieren Sie das Modul und legen Sie eine Instanz an."
+                            'caption' => "Die OpenWeatherOneCall Instanz ist optional. Für Wetterdaten wird sie benötigt; für den Kartenstandort wird bei fehlender Auswahl oder fehlenden Koordinaten automatisch die Symcon-Location-Instanz verwendet."
                         ],
                         [
                             'type' => 'SelectObject',
@@ -933,7 +932,17 @@ function wrShowFrame(index) {
     }
 
     let layer = wrRadarLayerCache[cacheKey] || null;
-    if (layer && wrConfig && wrConfig.showTileDebug) {
+
+    // Nur dann als Cache-Treffer anzeigen, wenn wirklich auf einen anderen,
+    // bereits vorhandenen Frame-Layer gewechselt wird.
+    //
+    // Beim ersten Öffnen wird der Initial-Frame aus WR_INITIAL aufgebaut und
+    // unmittelbar danach nochmals RefreshRadar ausgelöst. Dabei wird derselbe
+    // bereits sichtbare Layer erneut ausgewählt. Das ist kein echter
+    // Frame-Wechsel aus dem Cache und darf die laufenden Tile-Zähler nicht
+    // mit "(Cache)" überschreiben.
+    const isDifferentCachedLayer = layer && layer !== wrRadarLayer;
+    if (isDifferentCachedLayer && wrConfig && wrConfig.showTileDebug) {
         const frameLabel = frame.time ? new Date(Number(frame.time) * 1000).toLocaleTimeString() : '-';
         wrTileDebugStats = {
             frame: frameLabel + ' (Cache)',
@@ -1827,22 +1836,107 @@ HTML;
 
     private function GetLocation(): array
     {
+        // 1. Standort aus der gewählten OpenWeatherOneCall-Instanz verwenden.
         $owmInstID = $this->ReadPropertyInteger('OpenWeatherInstanceID');
         if ($owmInstID > 0 && @IPS_ObjectExists($owmInstID)) {
             $locationJson = @IPS_GetProperty($owmInstID, 'location');
             $location = json_decode((string) $locationJson, true);
-            if (is_array($location) && isset($location['latitude'], $location['longitude'])) {
+
+            if ($this->HasValidCoordinates($location)) {
+                $this->SendDebug('GetLocation', 'Standort aus OpenWeatherOneCall verwendet.', 0);
                 return [(float) $location['latitude'], (float) $location['longitude']];
             }
+
+            $this->SendDebug(
+                'GetLocation',
+                'OpenWeatherOneCall enthält keine gültige Location. Symcon Location Control wird verwendet.',
+                0
+            );
+        } else {
+            $this->SendDebug(
+                'GetLocation',
+                'Keine OpenWeatherOneCall-Instanz gewählt. Symcon Location Control wird verwendet.',
+                0
+            );
         }
 
-        $this->SendDebug(
-            'GetLocation',
-            'Keine gültigen Koordinaten in der OpenWeatherOneCall-Instanz gefunden. OpenWeatherInstanceID=' . $owmInstID,
-            0
+        // 2. Fallback auf die Symcon-Kerninstanz "Location Control".
+        $locationControlIDs = @IPS_GetInstanceListByModuleID(
+            '{45E97A63-F870-408A-B259-2933F7EABF74}'
         );
 
+        if (is_array($locationControlIDs) && count($locationControlIDs) > 0) {
+            $locationControlID = (int) $locationControlIDs[0];
+
+            // Seit IP-Symcon 5.0: JSON-Property "Location".
+            $locationJson = @IPS_GetProperty($locationControlID, 'Location');
+            $location = json_decode((string) $locationJson, true);
+
+            if ($this->HasValidCoordinates($location)) {
+                $this->SendDebug(
+                    'GetLocation',
+                    'Standort aus Symcon Location Control ID ' . $locationControlID . ' verwendet: ' .
+                    $location['latitude'] . ', ' . $location['longitude'],
+                    0
+                );
+
+                return [(float) $location['latitude'], (float) $location['longitude']];
+            }
+
+            // Kompatibilitäts-Fallback für sehr alte Symcon-Versionen.
+            $latitude = @IPS_GetProperty($locationControlID, 'Latitude');
+            $longitude = @IPS_GetProperty($locationControlID, 'Longitude');
+            $legacyLocation = [
+                'latitude' => $latitude,
+                'longitude' => $longitude
+            ];
+
+            if ($this->HasValidCoordinates($legacyLocation)) {
+                $this->SendDebug(
+                    'GetLocation',
+                    'Standort aus den alten Location-Control-Properties verwendet.',
+                    0
+                );
+
+                return [(float) $latitude, (float) $longitude];
+            }
+
+            $this->SendDebug(
+                'GetLocation',
+                'Location Control ID ' . $locationControlID . ' enthält keine gültigen Koordinaten. Location=' .
+                (string) $locationJson,
+                0
+            );
+        } else {
+            $this->SendDebug(
+                'GetLocation',
+                'Keine Symcon Location-Control-Instanz mit der erwarteten GUID gefunden.',
+                0
+            );
+        }
+
         return [0.0, 0.0];
+    }
+
+    private function HasValidCoordinates(mixed $location): bool
+    {
+        if (!is_array($location) ||
+            !array_key_exists('latitude', $location) ||
+            !array_key_exists('longitude', $location) ||
+            !is_numeric($location['latitude']) ||
+            !is_numeric($location['longitude'])) {
+            return false;
+        }
+
+        $latitude = (float) $location['latitude'];
+        $longitude = (float) $location['longitude'];
+
+        if ($latitude < -90.0 || $latitude > 90.0 ||
+            $longitude < -180.0 || $longitude > 180.0) {
+            return false;
+        }
+
+        return !($latitude === 0.0 && $longitude === 0.0);
     }
 
     private function GetMapStyle(): array
