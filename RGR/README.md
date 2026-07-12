@@ -94,7 +94,7 @@ oder
 Einstellbar sind
 
 * Radarprovider
-* Aktualisierungsintervall (bei allen Providern werden maximum alle 600sec (10min) neue Tiles geliefert.)
+* Aktualisierungsintervall
 * Autoplay (Vorsicht insbesondere bei kostenpflichtiegen Zugängen wie Rainbow, könnte einen hohen Tile-Verschleiss zur Folge haben.)
 * Tile-Debug
 * Rainbow-Layer
@@ -125,7 +125,7 @@ Die Visualisierung bietet
 
 Das Modul verwendet mehrere Optimierungen:
 
-* Wiederverwendung bereits geladener Radar-Tiles
+* Wiederverwendung bereits geladener Radar-Tiles duch Java Cache
 * Aktualisierung nur bei sichtbarer Visualisierung
 * automatische Größenanpassung für Desktop und Mobilgeräte
 * minimale Netzwerklast
