@@ -14,7 +14,6 @@ class Regenradar extends IPSModuleStrict
 
         $this->RegisterPropertyString('RadarProvider', 'rainviewer');
         $this->RegisterPropertyString('RainbowApiKey', '');
-        $this->RegisterPropertyString('RainbowLayer', 'precip');
         $this->RegisterPropertyInteger('RadarRefreshSeconds', 600);
         $this->RegisterPropertyBoolean('EnableAutoplay', false);
         $this->RegisterPropertyBoolean('ShowTileDebug', false);
@@ -138,17 +137,6 @@ class Regenradar extends IPSModuleStrict
                             ],
                         ],
                         ['type' => 'ValidationTextBox', 'name' => 'RainbowApiKey', 'caption' => 'Rainbow API-Key'],
-                        [
-                            'type' => 'Select',
-                            'name' => 'RainbowLayer',
-                            'caption' => 'Rainbow Layer',
-                            'options' => [
-                                ['caption' => 'Precip', 'value' => 'precip'],
-                                ['caption' => 'Precip Global', 'value' => 'precip-global'],
-                                ['caption' => 'Clouds', 'value' => 'clouds'],
-                                ['caption' => 'Radars', 'value' => 'radars'],
-                            ],
-                        ],
                         ['type' => 'NumberSpinner', 'name' => 'RadarRefreshSeconds', 'caption' => 'Radar aktualisieren alle Sekunden', 'minimum' => 60],
                         ['type' => 'CheckBox', 'name' => 'EnableAutoplay', 'caption' => 'Autoplay aktivieren'],
                         ['type' => 'CheckBox', 'name' => 'ShowTileDebug', 'caption' => 'Tile-Debug im HTML anzeigen'],
@@ -1971,7 +1959,7 @@ HTML;
     private function BuildRainbowPayload(): array
     {
         $apiKey = trim($this->ReadPropertyString('RainbowApiKey'));
-        $layer = $this->ReadPropertyString('RainbowLayer');
+        $layer = 'precip';
         $color = 8; // RainViewer Universal Blue / Original
 
         if ($apiKey === '') {
