@@ -88,7 +88,7 @@ class Regenradar extends IPSModuleStrict
                     'items' => [
                         [
                             'type'    => 'Label',
-                            'caption' => "Das Modul erfordert eine installierte OpenWeatherOneCall Instanz. Bitte installieren Sie das Modul und legen Sie eine Instanz an."
+                            'caption' => "Die OpenWeatherOneCall Instanz ist optional. Für Wetterdaten wird sie benötigt; für den Kartenstandort wird bei fehlender Auswahl oder fehlenden Koordinaten automatisch die Symcon-Location-Instanz verwendet."
                         ],
                         [
                             'type' => 'SelectObject',
