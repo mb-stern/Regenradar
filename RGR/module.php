@@ -885,18 +885,18 @@ function wrLv95FromWgs84(lat, lon) {
 }
 
 function wrMeteoswissColor(value) {
-    // Frühere MeteoSwiss-Farbskala mit fein abgestuften Niederschlagsmengen.
+    // MeteoSwiss PRECIP-Farbskala gemäss offizieller Radarlegende.
+    // Schwellen in mm/h: 1 / 2 / 4 / 6 / 10 / 20 / 40 / 60.
     if (!Number.isFinite(value) || value <= 0.05) return [0, 0, 0, 0];
-    if (value < 0.2)  return [179, 217, 255, 115];
-    if (value < 0.5)  return [102, 178, 255, 135];
-    if (value < 1.0)  return [51, 153, 255, 150];
-    if (value < 2.0)  return [0, 102, 255, 165];
-    if (value < 5.0)  return [0, 204, 102, 180];
-    if (value < 10.0) return [255, 230, 0, 195];
-    if (value < 20.0) return [255, 153, 0, 210];
-    if (value < 40.0) return [230, 51, 0, 225];
-    if (value < 70.0) return [179, 0, 179, 235];
-    return [255, 102, 255, 245];
+    if (value < 1.0)  return [155, 125, 150, 255]; // blass violett/grau
+    if (value < 2.0)  return [0, 0, 255, 255];     // blau
+    if (value < 4.0)  return [3, 140, 44, 255];    // dunkelgrün
+    if (value < 6.0)  return [3, 255, 3, 255];     // hellgrün
+    if (value < 10.0) return [255, 255, 0, 255];   // gelb
+    if (value < 20.0) return [255, 200, 0, 255];   // gelb-orange
+    if (value < 40.0) return [255, 125, 0, 255];   // orange
+    if (value < 60.0) return [255, 23, 0, 255];    // rot
+    return [175, 0, 220, 255];                     // violett
 }
 
 async function wrBuildMeteoswissImage(frame, layer, cacheKey) {
@@ -1738,16 +1738,15 @@ HTML;
                 'provider' => 'MeteoSwiss',
                 'title' => 'Niederschlag (mm/h)',
                 'entries' => [
-                    ['color' => '#b3d9ff', 'label' => '0,05–0,2 mm/h'],
-                    ['color' => '#66b2ff', 'label' => '0,2–0,5 mm/h'],
-                    ['color' => '#3399ff', 'label' => '0,5–1 mm/h'],
-                    ['color' => '#0066ff', 'label' => '1–2 mm/h'],
-                    ['color' => '#00cc66', 'label' => '2–5 mm/h'],
-                    ['color' => '#ffe600', 'label' => '5–10 mm/h'],
-                    ['color' => '#ff9900', 'label' => '10–20 mm/h'],
-                    ['color' => '#e63300', 'label' => '20–40 mm/h'],
-                    ['color' => '#b300b3', 'label' => '40–70 mm/h'],
-                    ['color' => '#ff66ff', 'label' => '≥ 70 mm/h'],
+                    ['color' => '#9b7d96', 'label' => '0,05–1 mm/h'],
+                    ['color' => '#0000ff', 'label' => '1–2 mm/h'],
+                    ['color' => '#038c2c', 'label' => '2–4 mm/h'],
+                    ['color' => '#03ff03', 'label' => '4–6 mm/h'],
+                    ['color' => '#ffff00', 'label' => '6–10 mm/h'],
+                    ['color' => '#ffc800', 'label' => '10–20 mm/h'],
+                    ['color' => '#ff7d00', 'label' => '20–40 mm/h'],
+                    ['color' => '#ff1700', 'label' => '40–60 mm/h'],
+                    ['color' => '#af00dc', 'label' => '≥ 60 mm/h'],
                 ]
             ];
         }
