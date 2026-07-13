@@ -885,18 +885,17 @@ function wrLv95FromWgs84(lat, lon) {
 }
 
 function wrMeteoswissColor(value) {
-    // MeteoSwiss PRECIP-Farbskala gemäss offizieller Radarlegende.
-    // Schwellen in mm/h: 1 / 2 / 4 / 6 / 10 / 20 / 40 / 60.
-    if (!Number.isFinite(value) || value <= 0.05) return [0, 0, 0, 0];
-    if (value < 1.0)  return [155, 125, 150, 255]; // blass violett/grau
-    if (value < 2.0)  return [0, 0, 255, 255];     // blau
-    if (value < 4.0)  return [3, 140, 44, 255];    // dunkelgrün
-    if (value < 6.0)  return [3, 255, 3, 255];     // hellgrün
-    if (value < 10.0) return [255, 255, 0, 255];   // gelb
-    if (value < 20.0) return [255, 200, 0, 255];   // gelb-orange
-    if (value < 40.0) return [255, 125, 0, 255];   // orange
-    if (value < 60.0) return [255, 23, 0, 255];    // rot
-    return [175, 0, 220, 255];                     // violett
+    // Einheitliche Modul-Palette für alle Radar-Provider.
+    // MeteoSwiss liefert Rohwerte in mm/h; diese werden mit derselben
+    // Blau–Gelb–Rot–Violett-Skala wie RainViewer und Rainbow eingefärbt.
+    if (!Number.isFinite(value) || value < 0.1) return [0, 0, 0, 0];
+    if (value < 0.5)  return [142, 230, 242, 210]; // hellblau / cyan
+    if (value < 2.5)  return [69, 191, 211, 225];  // türkis
+    if (value < 10.0) return [40, 127, 158, 235];  // dunkelblau / petrol
+    if (value < 25.0) return [255, 228, 59, 240];  // gelb
+    if (value < 50.0) return [245, 154, 69, 245];  // orange
+    if (value < 75.0) return [217, 88, 88, 250];   // rot
+    return [168, 79, 114, 255];                    // magenta / violett
 }
 
 async function wrBuildMeteoswissImage(frame, layer, cacheKey) {
@@ -1732,31 +1731,18 @@ HTML;
     {
         $provider = $this->ReadPropertyString('RadarProvider');
 
-        if ($provider === 'meteoswiss') {
-            return [
-                'type' => 'entries',
-                'provider' => 'MeteoSwiss',
-                'title' => 'Niederschlag (mm/h)',
-                'entries' => [
-                    ['color' => '#9b7d96', 'label' => '0,05–1 mm/h'],
-                    ['color' => '#0000ff', 'label' => '1–2 mm/h'],
-                    ['color' => '#038c2c', 'label' => '2–4 mm/h'],
-                    ['color' => '#03ff03', 'label' => '4–6 mm/h'],
-                    ['color' => '#ffff00', 'label' => '6–10 mm/h'],
-                    ['color' => '#ffc800', 'label' => '10–20 mm/h'],
-                    ['color' => '#ff7d00', 'label' => '20–40 mm/h'],
-                    ['color' => '#ff1700', 'label' => '40–60 mm/h'],
-                    ['color' => '#af00dc', 'label' => '≥ 60 mm/h'],
-                ]
-            ];
-        }
+        $providerName = match ($provider) {
+            'rainbow' => 'Rainbow',
+            'meteoswiss' => 'MeteoSwiss',
+            default => 'RainViewer',
+        };
 
-        // RainViewer (Farbschema 2) und Rainbow (Palette 8) verwenden in den
-        // tatsächlich angezeigten Tiles dieselbe blau-gelb-rote Farbfolge.
-        // Die schwächste sichtbare Stufe ist Hellblau/Cyan – nicht Grau/Beige.
+        // Einheitliche Farbskala für alle Provider. RainViewer und Rainbow
+        // liefern bereits passend eingefärbte Tiles; MeteoSwiss-Rohdaten
+        // werden in wrMeteoswissColor() mit exakt denselben Farben umgesetzt.
         return [
             'type' => 'entries',
-            'provider' => $provider === 'rainbow' ? 'Rainbow' : 'RainViewer',
+            'provider' => $providerName,
             'title' => 'Niederschlag (mm/h)',
             'entries' => [
                 ['color' => '#8ee6f2', 'label' => '0,1–0,5 mm/h'],
