@@ -133,7 +133,7 @@ class Regenradar extends IPSModuleStrict
                             'options' => [
                                 ['caption' => 'Rainviewer', 'value' => 'rainviewer'],
                                 ['caption' => 'Rainbow', 'value' => 'rainbow'],
-                                ['caption' => 'MeteoSwiss Open Data', 'value' => 'meteoswiss'],
+                                ['caption' => 'MeteoSwiss', 'value' => 'meteoswiss'],
                             ],
                         ],
                         ['type' => 'ValidationTextBox', 'name' => 'RainbowApiKey', 'caption' => 'Rainbow API-Key'],
@@ -885,18 +885,15 @@ function wrLv95FromWgs84(lat, lon) {
 }
 
 function wrMeteoswissColor(value) {
-    // Frühere MeteoSwiss-Farbskala mit fein abgestuften Niederschlagsmengen.
-    if (!Number.isFinite(value) || value <= 0.05) return [0, 0, 0, 0];
-    if (value < 0.2)  return [179, 217, 255, 115];
-    if (value < 0.5)  return [102, 178, 255, 135];
-    if (value < 1.0)  return [51, 153, 255, 150];
-    if (value < 2.0)  return [0, 102, 255, 165];
-    if (value < 5.0)  return [0, 204, 102, 180];
-    if (value < 10.0) return [255, 230, 0, 195];
-    if (value < 20.0) return [255, 153, 0, 210];
-    if (value < 40.0) return [230, 51, 0, 225];
-    if (value < 70.0) return [179, 0, 179, 235];
-    return [255, 102, 255, 245];
+    // Einheitliches Farbschema: RainViewer "Original" / Rainbow Palette 8.
+    // Die Schwellen entsprechen der RainViewer-Legende in mm/h.
+    if (!Number.isFinite(value) || value < 0.1) return [0, 0, 0, 0];
+    if (value < 0.5)  return [206, 192, 135, 150]; // 0.1 mm/h
+    if (value < 2.5)  return [0, 163, 224, 255];   // 0.5 mm/h
+    if (value < 10.0) return [0, 85, 136, 255];    // 2.5 mm/h
+    if (value < 50.0) return [255, 170, 0, 255];   // 10 mm/h
+    if (value < 70.0) return [193, 0, 0, 255];     // 50 mm/h
+    return [255, 119, 255, 255];                   // > 50 mm/h
 }
 
 async function wrBuildMeteoswissImage(frame, layer, cacheKey) {
@@ -1737,22 +1734,20 @@ HTML;
             default => 'RainViewer',
         };
 
-        // Einheitliche Legende auf Basis der früheren MeteoSwiss-Farbskala.
+        // Für alle Provider dieselbe, leicht verständliche Niederschlagsskala.
+        // Rainbow nutzt fest Palette 8 (RainViewer Universal Blue / Original).
+        // RainViewer liefert dieses Schema bereits; MeteoSwiss wird im Browser entsprechend eingefärbt.
         return [
             'type' => 'entries',
             'provider' => $providerName,
             'title' => 'Niederschlag (mm/h)',
             'entries' => [
-                ['color' => '#b3d9ff', 'label' => '0,05–0,2 mm/h'],
-                ['color' => '#66b2ff', 'label' => '0,2–0,5 mm/h'],
-                ['color' => '#3399ff', 'label' => '0,5–1 mm/h'],
-                ['color' => '#0066ff', 'label' => '1–2 mm/h'],
-                ['color' => '#00cc66', 'label' => '2–5 mm/h'],
-                ['color' => '#ffe600', 'label' => '5–10 mm/h'],
-                ['color' => '#ff9900', 'label' => '10–20 mm/h'],
-                ['color' => '#e63300', 'label' => '20–40 mm/h'],
-                ['color' => '#b300b3', 'label' => '40–70 mm/h'],
-                ['color' => '#ff66ff', 'label' => '≥ 70 mm/h'],
+                ['color' => '#cec087', 'label' => '0,1 mm/h'],
+                ['color' => '#00a3e0', 'label' => '0,5 mm/h'],
+                ['color' => '#005588', 'label' => '2,5 mm/h'],
+                ['color' => '#ffaa00', 'label' => '10 mm/h'],
+                ['color' => '#c10000', 'label' => '50 mm/h'],
+                ['color' => '#ff77ff', 'label' => '> 50 mm/h'],
             ]
         ];
     }
