@@ -1752,21 +1752,21 @@ HTML;
             ];
         }
 
-        // RainViewer verwendet im Tile-Pfad Farbschema 2 (Universal Blue).
-        // Rainbow verwendet fest Palette 8, die laut Rainbow-Dokumentation
-        // RainViewers "Universal Blue / Original" entspricht. Daher sind die
-        // Farbstufen gleich, werden aber mit dem jeweiligen Provider beschriftet.
+        // RainViewer (Farbschema 2) und Rainbow (Palette 8) verwenden in den
+        // tatsächlich angezeigten Tiles dieselbe blau-gelb-rote Farbfolge.
+        // Die schwächste sichtbare Stufe ist Hellblau/Cyan – nicht Grau/Beige.
         return [
             'type' => 'entries',
             'provider' => $provider === 'rainbow' ? 'Rainbow' : 'RainViewer',
             'title' => 'Niederschlag (mm/h)',
             'entries' => [
-                ['color' => '#cec087', 'label' => '0,1 mm/h'],
-                ['color' => '#00a3e0', 'label' => '0,5 mm/h'],
-                ['color' => '#005588', 'label' => '2,5 mm/h'],
-                ['color' => '#ffaa00', 'label' => '10 mm/h'],
-                ['color' => '#c10000', 'label' => '50 mm/h'],
-                ['color' => '#ff77ff', 'label' => '> 50 mm/h'],
+                ['color' => '#8ee6f2', 'label' => '0,1–0,5 mm/h'],
+                ['color' => '#45bfd3', 'label' => '0,5–2,5 mm/h'],
+                ['color' => '#287f9e', 'label' => '2,5–10 mm/h'],
+                ['color' => '#ffe43b', 'label' => '10–25 mm/h'],
+                ['color' => '#f59a45', 'label' => '25–50 mm/h'],
+                ['color' => '#d95858', 'label' => '50–75 mm/h'],
+                ['color' => '#a84f72', 'label' => '≥ 75 mm/h'],
             ]
         ];
     }
