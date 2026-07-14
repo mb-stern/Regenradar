@@ -142,11 +142,11 @@ Feedback, Verbesserungsvorschläge und Pull Requests sind jederzeit willkommen.
 
 ## Versionen
 
-**Version 1.2 (13.07.2026)**
+**Version 1.2 (14.07.2026)**
 * Neuer Radar-Provider 'Meteo Swiss' liefert Bilder im fünf Minuten Abstand, leider nur für die Schweiz.
 * Vereinheitlichung der Farben über alle Radar-Provider und Anzeige der Regenmenge in Millimeter.
 * Radar Konfiguration vereinfacht
-* Diverse kleinere Anpassungen
+* Umschalten des Radarprovider über die Visu
 
 **Version 1.1 (12.07.2026)**
 * Rückfall auf Location Control bei nicht oder nicht komplett konfigurierter OpenWeatherOneCall-Instanz.
