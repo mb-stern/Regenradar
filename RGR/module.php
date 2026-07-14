@@ -219,21 +219,7 @@ class Regenradar extends IPSModuleStrict
         return json_encode($form, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 
-    public function GetVisualizationTile(): array
-    {
-        $html = $this->BuildVisualizationHtml();
-
-        return [
-            'title'   => 'Regenradar',
-            'state'   => 'ok',
-            'content' => $html,
-            'detail'  => [
-                'content' => $html
-            ]
-        ];
-    }
-
-    private function BuildVisualizationHtml(): string
+    public function GetVisualizationTile(): string
     {
         $initial = [
             'type' => 'init',
