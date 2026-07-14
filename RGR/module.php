@@ -73,21 +73,6 @@ class Regenradar extends IPSModuleStrict
             case 'ReloadHtml':
                 $this->ReloadHtml();
                 return;
-
-            case 'SetRadarProvider':
-                $provider = strtolower(trim((string) $Value));
-                if (!in_array($provider, ['rainviewer', 'rainbow', 'meteoswiss'], true)) {
-                    throw new Exception('Ungültiger Radar-Provider: ' . $provider);
-                }
-
-                if ($provider === $this->ReadPropertyString('RadarProvider')) {
-                    return;
-                }
-
-                $this->SendDebug('SetRadarProvider', 'Radar-Provider wird auf ' . $provider . ' umgeschaltet.', 0);
-                IPS_SetProperty($this->InstanceID, 'RadarProvider', $provider);
-                IPS_ApplyChanges($this->InstanceID);
-                return;
         }
 
         throw new Exception('Invalid Ident: ' . $Ident);
@@ -341,35 +326,6 @@ class Regenradar extends IPSModuleStrict
             margin-bottom: calc(4px * var(--k));
             font-size: var(--wr-fs-tiny);
             white-space: nowrap;
-        }
-        #wr-legend .wr-provider-select {
-            display: block;
-            width: auto;
-            max-width: 100%;
-            margin: 0 0 calc(4px * var(--k));
-            padding: 0 calc(16px * var(--k)) 0 0;
-            border: 0;
-            border-radius: 0;
-            background-color: transparent;
-            color: var(--wr-text);
-            font: inherit;
-            font-weight: 600;
-            line-height: 1.2;
-            cursor: pointer;
-            appearance: auto;
-            -webkit-appearance: menulist;
-        }
-        #wr-legend .wr-provider-select:focus-visible {
-            outline: 1px solid var(--wr-btn-border);
-            outline-offset: 2px;
-        }
-        #wr-legend .wr-provider-select:disabled {
-            cursor: progress;
-            opacity: .65;
-        }
-        #wr-legend .wr-provider-select option {
-            color: #111;
-            background: #fff;
         }
         #wr-legend .wr-legend-image {
             display: block;
@@ -1267,36 +1223,10 @@ function wrRenderLegend(legend) {
     box.innerHTML = '';
 
     if (legend.provider) {
-        const providerNames = {
-            rainviewer: 'RainViewer',
-            rainbow: 'Rainbow',
-            meteoswiss: 'MeteoSwiss'
-        };
-        const currentProvider = (wrConfig && wrConfig.radarProvider)
-            ? String(wrConfig.radarProvider)
-            : String((wrRadarPayload && wrRadarPayload.provider) || 'rainviewer');
-        const providerSelect = document.createElement('select');
-        providerSelect.className = 'wr-provider-select';
-        providerSelect.title = 'Radar-Provider wechseln';
-        providerSelect.setAttribute('aria-label', 'Radar-Provider wechseln');
-
-        Object.keys(providerNames).forEach(function(value) {
-            const option = document.createElement('option');
-            option.value = value;
-            option.textContent = providerNames[value];
-            option.selected = value === currentProvider;
-            providerSelect.appendChild(option);
-        });
-
-        providerSelect.addEventListener('change', function() {
-            const selectedProvider = providerSelect.value;
-            if (selectedProvider === currentProvider) return;
-            providerSelect.disabled = true;
-            wrStopAnimation();
-            wrStopRadarRefreshTimer();
-            requestAction('SetRadarProvider', selectedProvider);
-        });
-        box.appendChild(providerSelect);
+        const provider = document.createElement('div');
+        provider.className = 'wr-legend-provider';
+        provider.textContent = legend.provider;
+        box.appendChild(provider);
     }
 
     if (legend.title) {
@@ -1717,7 +1647,6 @@ HTML;
             'lon' => $lon,
             'zoom' => $zoom,
             'theme' => $this->ReadPropertyString('Theme'),
-            'radarProvider' => $provider,
             'radarMaxZoom' => $radarMaxZoom,
             'radarRefreshSeconds' => max(60, $this->ReadPropertyInteger('RadarRefreshSeconds')),
             'enableAutoplay' => $this->ReadPropertyBoolean('EnableAutoplay'),
