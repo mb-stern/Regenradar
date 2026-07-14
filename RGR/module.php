@@ -14,8 +14,6 @@ class Regenradar extends IPSModuleStrict
 
         $this->RegisterPropertyString('RadarProvider', 'rainviewer');
         $this->RegisterPropertyString('RainbowApiKey', '');
-        $this->RegisterPropertyString('RainbowLayer', 'precip');
-        $this->RegisterPropertyInteger('RainbowColor', 5);
         $this->RegisterPropertyInteger('RadarRefreshSeconds', 600);
         $this->RegisterPropertyBoolean('EnableAutoplay', false);
         $this->RegisterPropertyBoolean('ShowTileDebug', false);
@@ -25,6 +23,8 @@ class Regenradar extends IPSModuleStrict
 
         // Gemerkte Variablen, auf deren VM_UPDATE die Wetter-/Forecast-Anzeige sofort aktualisiert wird.
         $this->RegisterAttributeString('WeatherWatchIDs', '[]');
+        // Signatur des zuletzt an die Visualisierung übertragenen neuesten Radarframes.
+        $this->RegisterAttributeString('LastRadarFrameSignature', '');
 
         // HTML-SDK aktivieren. 1 = individuelle Darstellung via HTML-SDK.
         $this->SetVisualizationType(1);
@@ -73,6 +73,21 @@ class Regenradar extends IPSModuleStrict
             case 'ReloadHtml':
                 $this->ReloadHtml();
                 return;
+
+            case 'SetRadarProvider':
+                $provider = strtolower(trim((string) $Value));
+                if (!in_array($provider, ['rainviewer', 'rainbow', 'meteoswiss'], true)) {
+                    throw new Exception('Ungültiger Radar-Provider: ' . $provider);
+                }
+
+                if ($provider === $this->ReadPropertyString('RadarProvider')) {
+                    return;
+                }
+
+                $this->SendDebug('SetRadarProvider', 'Radar-Provider wird auf ' . $provider . ' umgeschaltet.', 0);
+                IPS_SetProperty($this->InstanceID, 'RadarProvider', $provider);
+                IPS_ApplyChanges($this->InstanceID);
+                return;
         }
 
         throw new Exception('Invalid Ident: ' . $Ident);
@@ -88,7 +103,7 @@ class Regenradar extends IPSModuleStrict
                     'items' => [
                         [
                             'type'    => 'Label',
-                            'caption' => "Die OpenWeatherOneCall Instanz ist optional. Für Wetterdaten wird sie benötigt; für den Kartenstandort wird bei fehlender Auswahl oder fehlenden Koordinaten automatisch die Symcon-Location-Instanz verwendet."
+                            'caption' => "Das Modul erfordert eine installierte OpenWeatherOneCall Instanz. Bitte installieren Sie das Modul und legen Sie eine Instanz an."
                         ],
                         [
                             'type' => 'SelectObject',
@@ -133,38 +148,10 @@ class Regenradar extends IPSModuleStrict
                             'options' => [
                                 ['caption' => 'Rainviewer', 'value' => 'rainviewer'],
                                 ['caption' => 'Rainbow', 'value' => 'rainbow'],
+                                ['caption' => 'MeteoSwiss', 'value' => 'meteoswiss'],
                             ],
                         ],
                         ['type' => 'ValidationTextBox', 'name' => 'RainbowApiKey', 'caption' => 'Rainbow API-Key'],
-                        [
-                            'type' => 'Select',
-                            'name' => 'RainbowLayer',
-                            'caption' => 'Rainbow Layer',
-                            'options' => [
-                                ['caption' => 'Precip', 'value' => 'precip'],
-                                ['caption' => 'Precip Global', 'value' => 'precip-global'],
-                                ['caption' => 'Clouds', 'value' => 'clouds'],
-                                ['caption' => 'Radars', 'value' => 'radars'],
-                            ],
-                        ],
-                       [
-                        'type' => 'Select',
-                        'name' => 'RainbowColor',
-                        'caption' => 'Farbpalette',
-                        'options' => 
-                        [
-                            ['caption' => '0 - Rainbow', 'value' => 0],
-                            ['caption' => '1 - TWC', 'value' => 1],
-                            ['caption' => '2 - Dark Sky', 'value' => 2],
-                            ['caption' => '3 - Meteored', 'value' => 3],
-                            ['caption' => '4 - Nexrad', 'value' => 4],
-                            ['caption' => '5 - Rainviewer', 'value' => 5],
-                            ['caption' => '6 - Selex', 'value' => 6],
-                            ['caption' => '7 - Titan', 'value' => 7],
-                            ['caption' => '8 - Rainviewer Universal Blue', 'value' => 8],
-                            ['caption' => '9 - Rainviewer TWC', 'value' => 9],
-                        ]
-                    ],
                         ['type' => 'NumberSpinner', 'name' => 'RadarRefreshSeconds', 'caption' => 'Radar aktualisieren alle Sekunden', 'minimum' => 60],
                         ['type' => 'CheckBox', 'name' => 'EnableAutoplay', 'caption' => 'Autoplay aktivieren'],
                         ['type' => 'CheckBox', 'name' => 'ShowTileDebug', 'caption' => 'Tile-Debug im HTML anzeigen'],
@@ -348,11 +335,41 @@ class Regenradar extends IPSModuleStrict
             height: var(--wr-legend-swatch-h);
             border: 1px solid var(--wr-border);
         }
+        #wr-legend .wr-legend-provider,
         #wr-legend .wr-legend-title {
             font-weight: 600;
             margin-bottom: calc(4px * var(--k));
             font-size: var(--wr-fs-tiny);
             white-space: nowrap;
+        }
+        #wr-legend .wr-provider-select {
+            display: block;
+            width: auto;
+            max-width: 100%;
+            margin: 0 0 calc(4px * var(--k));
+            padding: 0 calc(16px * var(--k)) 0 0;
+            border: 0;
+            border-radius: 0;
+            background-color: transparent;
+            color: var(--wr-text);
+            font: inherit;
+            font-weight: 600;
+            line-height: 1.2;
+            cursor: pointer;
+            appearance: auto;
+            -webkit-appearance: menulist;
+        }
+        #wr-legend .wr-provider-select:focus-visible {
+            outline: 1px solid var(--wr-btn-border);
+            outline-offset: 2px;
+        }
+        #wr-legend .wr-provider-select:disabled {
+            cursor: progress;
+            opacity: .65;
+        }
+        #wr-legend .wr-provider-select option {
+            color: #111;
+            background: #fff;
         }
         #wr-legend .wr-legend-image {
             display: block;
@@ -680,6 +697,7 @@ class Regenradar extends IPSModuleStrict
 </div>
 
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/h5wasm@0.10.3/dist/iife/h5wasm.min.js"></script>
 
 <script>
 (function wrScaleByTile(){
@@ -719,7 +737,10 @@ let wrAnimationTimer = null;
 let wrRadarRefreshTimer = null;
 let wrLastRadarRequestAt = 0;
 let wrRadarLayerCache = {};
-let wrTileDebugStats = { frame: '-', provider: '-', started: 0, loaded: 0, errors: 0, complete: false };
+let wrRadarObjectUrlCache = {};
+let wrRadarLoadedAtCache = {};
+let wrH5ReadyPromise = null;
+let wrTileDebugStats = { frame: '-', provider: '-', source: '-', loadedAt: '-', started: 0, loaded: 0, errors: 0, complete: false };
 const WR_ANIMATION_DELAY_MS = 1000;
 const wrPlaySvg = '<svg viewBox="0 0 24 24"><path d="M8 5l12 7-12 7V5z"/></svg>';
 const wrPauseSvg = '<svg viewBox="0 0 24 24"><path d="M8 5h3v14H8V5zm5 0h3v14h-3V5z"/></svg>';
@@ -822,19 +843,23 @@ function wrUpdateTileDebug() {
         '<div class="wr-debug-title">Tile-Debug</div>' +
         '<div class="wr-debug-line">Provider: ' + wrEscapeHtml(wrTileDebugStats.provider) + '</div>' +
         '<div class="wr-debug-line">Frame: ' + wrEscapeHtml(wrTileDebugStats.frame) + '</div>' +
+        '<div class="wr-debug-line">Quelle: ' + wrEscapeHtml(wrTileDebugStats.source || '-') + '</div>' +
+        '<div class="wr-debug-line">Geladen um: ' + wrEscapeHtml(wrTileDebugStats.loadedAt || '-') + '</div>' +
         '<div class="wr-debug-line">Start: ' + wrTileDebugStats.started + '</div>' +
         '<div class="wr-debug-line">Geladen: ' + wrTileDebugStats.loaded + '</div>' +
         '<div class="wr-debug-line">Fehler: ' + wrTileDebugStats.errors + '</div>' +
         '<div class="wr-debug-line">Status: ' + (wrTileDebugStats.complete ? 'vollständig' : 'lädt') + '</div>';
 }
 
-function wrAttachTileDebug(layer, frame) {
+function wrAttachTileDebug(layer, frame, layerType, cacheKey) {
     if (!layer || !frame) return layer;
 
     const frameLabel = frame.time ? new Date(Number(frame.time) * 1000).toLocaleTimeString() : '-';
     wrTileDebugStats = {
         frame: frameLabel,
         provider: wrRadarPayload && wrRadarPayload.provider ? wrRadarPayload.provider : '-',
+        source: layerType === 'image' ? 'Neu geladen (HDF5 → PNG)' : 'Neu angefordert',
+        loadedAt: '-',
         started: 0,
         loaded: 0,
         errors: 0,
@@ -842,23 +867,42 @@ function wrAttachTileDebug(layer, frame) {
     };
     wrUpdateTileDebug();
 
+    if (layerType === 'image') {
+        wrTileDebugStats.started = 1;
+        wrUpdateTileDebug();
+        layer.on('load', function() {
+            const loadedAt = new Date().toLocaleTimeString();
+            if (cacheKey) wrRadarLoadedAtCache[cacheKey] = loadedAt;
+            wrTileDebugStats.loaded = 1;
+            wrTileDebugStats.loadedAt = loadedAt;
+            wrTileDebugStats.complete = true;
+            wrUpdateTileDebug();
+        });
+        layer.on('error', function() {
+            wrTileDebugStats.errors++;
+            wrTileDebugStats.complete = true;
+            wrUpdateTileDebug();
+        });
+        return layer;
+    }
+
     layer.on('tileloadstart', function() {
         wrTileDebugStats.started++;
         wrTileDebugStats.complete = false;
         wrUpdateTileDebug();
     });
-
     layer.on('tileload', function() {
         wrTileDebugStats.loaded++;
         wrUpdateTileDebug();
     });
-
     layer.on('tileerror', function() {
         wrTileDebugStats.errors++;
         wrUpdateTileDebug();
     });
-
     layer.on('load', function() {
+        const loadedAt = new Date().toLocaleTimeString();
+        if (cacheKey) wrRadarLoadedAtCache[cacheKey] = loadedAt;
+        wrTileDebugStats.loadedAt = loadedAt;
         wrTileDebugStats.complete = true;
         wrUpdateTileDebug();
     });
@@ -866,9 +910,118 @@ function wrAttachTileDebug(layer, frame) {
     return layer;
 }
 
+function wrGetH5Module() {
+    if (!wrH5ReadyPromise) {
+        wrH5ReadyPromise = h5wasm.ready;
+    }
+    return wrH5ReadyPromise;
+}
+
+function wrLv95FromWgs84(lat, lon) {
+    const latp = (lat * 3600 - 169028.66) / 10000;
+    const lonp = (lon * 3600 - 26782.5) / 10000;
+    const east = 2600072.37 + 211455.93 * lonp - 10938.51 * lonp * latp
+        - 0.36 * lonp * latp * latp - 44.54 * lonp * lonp * lonp;
+    const north = 1200147.07 + 308807.95 * latp + 3745.25 * lonp * lonp
+        + 76.63 * latp * latp - 194.56 * lonp * lonp * latp
+        + 119.79 * latp * latp * latp;
+    return [east, north];
+}
+
+function wrMeteoswissColor(value) {
+    // Kräftige, hoch gesättigte Blau–Gelb–Rot–Violett-Palette für die
+    // selbst gerenderten MeteoSwiss-HDF5-Daten. Die Intensitätsgrenzen
+    // bleiben unverändert; nur Kontrast, Sättigung und Deckkraft sind erhöht.
+    if (!Number.isFinite(value) || value < 0.1) return [0, 0, 0, 0];
+    if (value < 0.5)  return [0, 210, 255, 255];  // kräftiges cyan
+    if (value < 2.5)  return [0, 160, 210, 255];  // kräftiges türkis
+    if (value < 10.0) return [0, 90, 170, 255];   // sattes dunkelblau
+    if (value < 25.0) return [255, 220, 0, 255];  // kräftiges gelb
+    if (value < 50.0) return [255, 130, 0, 255];  // kräftiges orange
+    if (value < 75.0) return [235, 30, 40, 255];  // kräftiges rot
+    return [190, 0, 170, 255];                    // kräftiges magenta / violett
+}
+
+async function wrBuildMeteoswissImage(frame, layer, cacheKey) {
+    try {
+        const Module = await wrGetH5Module();
+        const response = await fetch(frame.url, { cache: 'force-cache' });
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        const bytes = new Uint8Array(await response.arrayBuffer());
+        const filename = '/tmp/' + String(cacheKey).replace(/[^a-zA-Z0-9_.-]/g, '_') + '.h5';
+        Module.FS.writeFile(filename, bytes);
+
+        const file = new h5wasm.File(filename, 'r');
+        const dataset = file.get('dataset1/data1/data');
+        const values = dataset.value;
+        const shape = dataset.shape;
+        const srcHeight = Number(shape[0]);
+        const srcWidth = Number(shape[1]);
+
+        const bounds = frame.bounds || [[43.619, 2.68942], [49.3744, 12.4623]];
+        const south = Number(bounds[0][0]);
+        const west = Number(bounds[0][1]);
+        const north = Number(bounds[1][0]);
+        const east = Number(bounds[1][1]);
+
+        const canvas = document.createElement('canvas');
+        canvas.width = srcWidth;
+        canvas.height = srcHeight;
+        const ctx = canvas.getContext('2d');
+        const image = ctx.createImageData(srcWidth, srcHeight);
+        const rgba = image.data;
+
+        // MeteoSwiss-Raster: LV95, 1 km, E=2255000..2965000, N=840000..1480000.
+        // Für Leaflet wird es in ein geographisch rechteckiges WGS84-Bild umgerechnet.
+        const srcMinE = 2255000;
+        const srcMaxN = 1480000;
+        const scale = 1000;
+
+        for (let y = 0; y < srcHeight; y++) {
+            const lat = north - ((y + 0.5) / srcHeight) * (north - south);
+            for (let x = 0; x < srcWidth; x++) {
+                const lon = west + ((x + 0.5) / srcWidth) * (east - west);
+                const lv = wrLv95FromWgs84(lat, lon);
+                const sx = Math.floor((lv[0] - srcMinE) / scale);
+                const sy = Math.floor((srcMaxN - lv[1]) / scale);
+                const out = (y * srcWidth + x) * 4;
+
+                if (sx < 0 || sx >= srcWidth || sy < 0 || sy >= srcHeight) continue;
+                const value = Number(values[sy * srcWidth + sx]);
+                const color = wrMeteoswissColor(value);
+                rgba[out] = color[0];
+                rgba[out + 1] = color[1];
+                rgba[out + 2] = color[2];
+                rgba[out + 3] = color[3];
+            }
+        }
+
+        ctx.putImageData(image, 0, 0);
+        file.close();
+        try { Module.FS.unlink(filename); } catch (e) {}
+
+        const blob = await new Promise(function(resolve, reject) {
+            canvas.toBlob(function(result) {
+                if (result) resolve(result); else reject(new Error('PNG-Erzeugung fehlgeschlagen'));
+            }, 'image/png');
+        });
+        const objectUrl = URL.createObjectURL(blob);
+        wrRadarObjectUrlCache[cacheKey] = objectUrl;
+        wrTileDebugStats.source = 'Neu geladen (HDF5 → PNG)';
+        wrUpdateTileDebug();
+        layer.setUrl(objectUrl);
+    } catch (e) {
+        wrTileDebugStats.errors++;
+        wrTileDebugStats.complete = true;
+        wrUpdateTileDebug();
+        console.error('MeteoSwiss Radar konnte nicht geladen werden:', e);
+    }
+}
+
 function wrBuildRadarLayer(frame) {
     if (!wrRadarPayload || !frame) return null;
 
+    const cacheKey = wrRadarCacheKey(frame);
     let layer = null;
 
     if (wrRadarPayload.provider === 'rainviewer') {
@@ -887,7 +1040,28 @@ function wrBuildRadarLayer(frame) {
         );
     }
 
-    return wrAttachTileDebug(layer, frame);
+    if (wrRadarPayload.provider === 'meteoswiss') {
+        const bounds = frame.bounds || [[43.619, 2.68942], [49.3744, 12.4623]];
+        const transparentPixel = 'data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=';
+        layer = L.imageOverlay(transparentPixel, bounds, {
+            opacity: 0,
+            interactive: false,
+            crossOrigin: false
+        });
+        wrAttachTileDebug(layer, frame, 'image');
+        const key = wrRadarCacheKey(frame);
+        if (wrRadarObjectUrlCache[key]) {
+            wrTileDebugStats.source = 'PNG-Cache';
+            wrTileDebugStats.complete = true;
+            wrUpdateTileDebug();
+            layer.setUrl(wrRadarObjectUrlCache[key]);
+        } else {
+            wrBuildMeteoswissImage(frame, layer, key);
+        }
+        return layer;
+    }
+
+    return wrAttachTileDebug(layer, frame, 'tile', cacheKey);
 }
 
 function wrRadarCacheKey(frame) {
@@ -904,6 +1078,10 @@ function wrRadarCacheKey(frame) {
         return 'rainbow|' + String(frame.time || '') + '|' + String(frame.url || '');
     }
 
+    if (wrRadarPayload.provider === 'meteoswiss') {
+        return 'meteoswiss|' + String(frame.time || '') + '|' + String(frame.url || '');
+    }
+
     return String(frame.time || '') + '|' + JSON.stringify(frame);
 }
 
@@ -915,6 +1093,11 @@ function wrPruneRadarLayerCache(validKeys) {
                 wrRadarLayer = null;
             }
             delete wrRadarLayerCache[key];
+            if (wrRadarObjectUrlCache[key]) {
+                try { URL.revokeObjectURL(wrRadarObjectUrlCache[key]); } catch(e) {}
+                delete wrRadarObjectUrlCache[key];
+            }
+            delete wrRadarLoadedAtCache[key];
         }
     }
 }
@@ -947,6 +1130,8 @@ function wrShowFrame(index) {
         wrTileDebugStats = {
             frame: frameLabel + ' (Cache)',
             provider: wrRadarPayload && wrRadarPayload.provider ? wrRadarPayload.provider : '-',
+            source: 'JavaScript-Layer-Cache',
+            loadedAt: wrRadarLoadedAtCache[cacheKey] || '-',
             started: 0,
             loaded: 0,
             errors: 0,
@@ -996,6 +1181,13 @@ function wrClearRadarLayers() {
         }
     }
     wrRadarLayerCache = {};
+    for (const key in wrRadarObjectUrlCache) {
+        if (Object.prototype.hasOwnProperty.call(wrRadarObjectUrlCache, key)) {
+            try { URL.revokeObjectURL(wrRadarObjectUrlCache[key]); } catch(e) {}
+        }
+    }
+    wrRadarObjectUrlCache = {};
+    wrRadarLoadedAtCache = {};
     wrRadarLayer = null;
 }
 
@@ -1073,6 +1265,39 @@ function wrRenderLegend(legend) {
 
     box.style.display = 'block';
     box.innerHTML = '';
+
+    if (legend.provider) {
+        const providerNames = {
+            rainviewer: 'RainViewer',
+            rainbow: 'Rainbow',
+            meteoswiss: 'MeteoSwiss'
+        };
+        const currentProvider = (wrConfig && wrConfig.radarProvider)
+            ? String(wrConfig.radarProvider)
+            : String((wrRadarPayload && wrRadarPayload.provider) || 'rainviewer');
+        const providerSelect = document.createElement('select');
+        providerSelect.className = 'wr-provider-select';
+        providerSelect.title = 'Radar-Provider wechseln';
+        providerSelect.setAttribute('aria-label', 'Radar-Provider wechseln');
+
+        Object.keys(providerNames).forEach(function(value) {
+            const option = document.createElement('option');
+            option.value = value;
+            option.textContent = providerNames[value];
+            option.selected = value === currentProvider;
+            providerSelect.appendChild(option);
+        });
+
+        providerSelect.addEventListener('change', function() {
+            const selectedProvider = providerSelect.value;
+            if (selectedProvider === currentProvider) return;
+            providerSelect.disabled = true;
+            wrStopAnimation();
+            wrStopRadarRefreshTimer();
+            requestAction('SetRadarProvider', selectedProvider);
+        });
+        box.appendChild(providerSelect);
+    }
 
     if (legend.title) {
         const title = document.createElement('div');
@@ -1159,6 +1384,8 @@ function wrInitMap(config) {
 function wrRenderRadar(payload) {
     if (!payload || !wrMap) return;
 
+    // Bei einer laufenden Animation den Zustand über das Radar-Update hinweg erhalten.
+    const wasPlaying = wrAnimationTimer !== null;
     wrStopAnimation();
     wrRadarPayload = payload;
 
@@ -1190,7 +1417,7 @@ function wrRenderRadar(payload) {
     }
 
     // wie im Script: Rainviewer startet beim letzten Past-Frame; Rainbow in der Mitte der Timeline.
-    if (payload.provider === 'rainviewer') {
+    if (payload.provider === 'rainviewer' || payload.provider === 'meteoswiss') {
         wrFrameIndex = wrFrames.length - 1;
     } else {
         wrFrameIndex = Math.floor(wrFrames.length / 2);
@@ -1198,7 +1425,9 @@ function wrRenderRadar(payload) {
 
     wrShowFrame(wrFrameIndex);
 
-    if (wrConfig && wrConfig.enableAutoplay) {
+    // Konfiguriertes Autoplay startet initial automatisch. Wurde die Animation
+    // manuell gestartet, läuft sie nach einem Poll ebenfalls weiter.
+    if (wasPlaying || (wrConfig && wrConfig.enableAutoplay)) {
         wrPlayAnimation();
     }
 }
@@ -1429,13 +1658,28 @@ HTML;
 
     public function UpdateRadar(): void
     {
+        $provider = $this->ReadPropertyString('RadarProvider');
+        $payload = $this->BuildRadarPayload();
+        $signature = $this->BuildRadarFrameSignature($payload);
+        $previousSignature = $this->ReadAttributeString('LastRadarFrameSignature');
+
+        $cacheState = 'keine Frames';
+        if ($signature !== '') {
+            if ($signature === $previousSignature) {
+                $cacheState = 'unverändert – vorhandene Browser-Layer werden aus dem Cache verwendet';
+            } else {
+                $cacheState = 'neuer Frame – nur neue Tiles bzw. HDF5-Daten werden geladen';
+                $this->WriteAttributeString('LastRadarFrameSignature', $signature);
+            }
+        }
+
         $this->SendDebug(
             'UpdateRadar',
-            'Radar-Aktualisierung gestartet. Provider=' . $this->ReadPropertyString('RadarProvider'),
+            'Provider=' . $provider . ', Status=' . $cacheState,
             0
         );
 
-        $this->SendVisualizationMessage('radar', $this->BuildRadarPayload());
+        $this->SendVisualizationMessage('radar', $payload);
     }
 
     public function ReloadHtml(): void
@@ -1464,7 +1708,7 @@ HTML;
     {
         [$lat, $lon] = $this->GetLocation();
         $provider = $this->ReadPropertyString('RadarProvider');
-        $radarMaxZoom = ($provider === 'rainbow') ? 12 : 7;
+        $radarMaxZoom = ($provider === 'rainbow' || $provider === 'meteoswiss') ? 12 : 7;
         $zoom = min(max(1, $this->ReadPropertyInteger('Zoom')), $radarMaxZoom);
         [$mapTileUrl, $mapAttribution, $subdomains] = $this->GetMapStyle();
 
@@ -1473,6 +1717,7 @@ HTML;
             'lon' => $lon,
             'zoom' => $zoom,
             'theme' => $this->ReadPropertyString('Theme'),
+            'radarProvider' => $provider,
             'radarMaxZoom' => $radarMaxZoom,
             'radarRefreshSeconds' => max(60, $this->ReadPropertyInteger('RadarRefreshSeconds')),
             'enableAutoplay' => $this->ReadPropertyBoolean('EnableAutoplay'),
@@ -1557,42 +1802,41 @@ HTML;
     {
         $provider = $this->ReadPropertyString('RadarProvider');
 
-        if ($provider === 'rainbow') {
-            $color = min(max(0, $this->ReadPropertyInteger('RainbowColor')), 9);
-            $palettes = [
-                0 => ['name' => 'Rainbow', 'image' => 'rainbow_rain.png'],
-                1 => ['name' => 'TWC', 'image' => 'twc_rain.png'],
-                2 => ['name' => 'Dark Sky', 'image' => 'dark_sky_rain.png'],
-                3 => ['name' => 'Meteored', 'image' => 'meteored_rain.png'],
-                4 => ['name' => 'NEXRAD', 'image' => 'nexrad_rain.png'],
-                5 => ['name' => 'Rainviewer', 'image' => 'rainviewer_rain.png'],
-                6 => ['name' => 'SELEX-IS', 'image' => 'selex_rain.png'],
-                7 => ['name' => 'TITAN', 'image' => 'titan_rain.png'],
-                8 => ['name' => 'Universal Blue', 'image' => 'universal_blue_rain.png'],
-                9 => ['name' => 'Rainviewer TWC', 'image' => 'twc_rv_rain.png'],
+        $providerName = match ($provider) {
+            'rainbow' => 'Rainbow',
+            'meteoswiss' => 'MeteoSwiss',
+            default => 'RainViewer',
+        };
+
+        // RainViewer und Rainbow behalten ihre bisherige Tile-Legende.
+        // MeteoSwiss wird im Browser selbst gerendert und erhält deshalb die
+        // kräftigeren Farben aus wrMeteoswissColor(), damit Legende und Bild
+        // weiterhin exakt übereinstimmen.
+        $entries = $provider === 'meteoswiss'
+            ? [
+                ['color' => '#00d2ff', 'label' => '0,1–0,5 mm/h'],
+                ['color' => '#00a0d2', 'label' => '0,5–2,5 mm/h'],
+                ['color' => '#005aaa', 'label' => '2,5–10 mm/h'],
+                ['color' => '#ffdc00', 'label' => '10–25 mm/h'],
+                ['color' => '#ff8200', 'label' => '25–50 mm/h'],
+                ['color' => '#eb1e28', 'label' => '50–75 mm/h'],
+                ['color' => '#be00aa', 'label' => '≥ 75 mm/h'],
+            ]
+            : [
+                ['color' => '#8ee6f2', 'label' => '0,1–0,5 mm/h'],
+                ['color' => '#45bfd3', 'label' => '0,5–2,5 mm/h'],
+                ['color' => '#287f9e', 'label' => '2,5–10 mm/h'],
+                ['color' => '#ffe43b', 'label' => '10–25 mm/h'],
+                ['color' => '#f59a45', 'label' => '25–50 mm/h'],
+                ['color' => '#d95858', 'label' => '50–75 mm/h'],
+                ['color' => '#a84f72', 'label' => '≥ 75 mm/h'],
             ];
 
-            $palette = $palettes[$color] ?? $palettes[0];
-
-            return [
-                'type' => 'image',
-                'title' => 'Rainbow ' . $color . ' - ' . $palette['name'],
-                'image' => 'https://doc.rainbow.ai/images/palletes/' . $palette['image'],
-                'note' => 'offizielle Rainbow-Rain-Palette'
-            ];
-        }
-
-        // RainViewer: keine Auswahl mehr; Standard-Legende passend zur festen Tile-URL /2/1_1.png.
         return [
             'type' => 'entries',
-            'title' => 'RainViewer Standard',
-            'entries' => [
-                ['color' => '#b3d9ff', 'label' => 'Sehr leicht'],
-                ['color' => '#3399ff', 'label' => 'Leicht'],
-                ['color' => '#0066ff', 'label' => 'Mäßig'],
-                ['color' => '#cc3300', 'label' => 'Stark'],
-                ['color' => '#990099', 'label' => 'Extrem'],
-            ]
+            'provider' => $providerName,
+            'title' => 'Niederschlag (mm/h)',
+            'entries' => $entries
         ];
     }
 
@@ -1659,11 +1903,31 @@ HTML;
         return $forecast;
     }
 
+    private function BuildRadarFrameSignature(array $payload): string
+    {
+        $frames = $payload['frames'] ?? [];
+        if (!is_array($frames) || count($frames) === 0) {
+            return '';
+        }
+
+        $latest = $frames[count($frames) - 1];
+        if (!is_array($latest)) {
+            return '';
+        }
+
+        return (string) ($payload['provider'] ?? '') . '|' .
+            (string) ($latest['time'] ?? '') . '|' .
+            (string) ($latest['url'] ?? ($latest['path'] ?? ''));
+    }
+
     private function BuildRadarPayload(): array
     {
         $provider = $this->ReadPropertyString('RadarProvider');
         if ($provider === 'rainbow') {
             return $this->BuildRainbowPayload();
+        }
+        if ($provider === 'meteoswiss') {
+            return $this->BuildMeteoswissPayload();
         }
 
         return $this->BuildRainviewerPayload();
@@ -1704,11 +1968,103 @@ HTML;
         ];
     }
 
+    private function BuildMeteoswissPayload(): array
+    {
+        $item = null;
+        $itemDate = '';
+
+        // Die Tages-Items werden in UTC geführt. Rund um Mitternacht beide Tage prüfen.
+        for ($daysBack = 0; $daysBack <= 2; $daysBack++) {
+            $date = gmdate('Ymd', time() - ($daysBack * 86400));
+            $url = 'https://data.geo.admin.ch/api/stac/v1/collections/' .
+                'ch.meteoschweiz.ogd-radar-precip/items/' . $date . '-ch' .
+                '?_=' . time();
+            $json = $this->HttpGet(
+                $url,
+                [
+                    'Accept: application/geo+json, application/json',
+                    'Cache-Control: no-cache',
+                    'Pragma: no-cache'
+                ],
+                20
+            );
+            $candidate = json_decode($json, true);
+            if (is_array($candidate) && isset($candidate['assets']) && is_array($candidate['assets'])) {
+                $item = $candidate;
+                $itemDate = $date;
+                break;
+            }
+        }
+
+        if (!is_array($item)) {
+            $this->SendDebug('BuildMeteoswissPayload', 'Kein aktuelles MeteoSwiss-STAC-Tagesitem gefunden.', 0);
+            return [
+                'provider' => 'meteoswiss',
+                'frames' => [],
+                'error' => 'MeteoSwiss-Daten nicht erreichbar'
+            ];
+        }
+
+        $frames = [];
+        foreach ($item['assets'] as $name => $asset) {
+            if (!is_string($name) || !preg_match('/^rzc(\d{2})(\d{3})(\d{2})(\d{2}).*\.h5$/i', $name, $match)) {
+                continue;
+            }
+            if (!is_array($asset) || empty($asset['href'])) {
+                continue;
+            }
+
+            $year = 2000 + (int) $match[1];
+            $dayOfYear = max(1, (int) $match[2]);
+            $hour = min(23, (int) $match[3]);
+            $minute = min(59, (int) $match[4]);
+            $base = gmmktime(0, 0, 0, 1, 1, $year);
+            $timestamp = $base + (($dayOfYear - 1) * 86400) + ($hour * 3600) + ($minute * 60);
+
+            $frames[] = [
+                'time' => $timestamp,
+                'url' => (string) $asset['href'],
+                // Gesamtes RZC-Raster; wird im Browser von LV95 nach WGS84 umgerechnet.
+                'bounds' => [[43.619, 2.68942], [49.3744, 12.4623]]
+            ];
+        }
+
+        usort($frames, static function (array $a, array $b): int {
+            return ((int) $a['time']) <=> ((int) $b['time']);
+        });
+
+        // Für die Animation nur die letzten 12 Bilder (= rund 55 Minuten) übertragen.
+        if (count($frames) > 12) {
+            $frames = array_slice($frames, -12);
+        }
+
+        $latestFrameTime = '-';
+        if (!empty($frames)) {
+            $latestFrame = $frames[count($frames) - 1];
+            $latestFrameTime = gmdate('H:i:s', (int) $latestFrame['time']) . ' UTC';
+        }
+
+        $this->SendDebug(
+            'BuildMeteoswissPayload',
+            'MeteoSwiss RZC Frames geladen: ' . count($frames) .
+            ', neuester Frame=' . $latestFrameTime .
+            ', Tagesitem=' . $itemDate,
+            0
+        );
+
+        return [
+            'provider' => 'meteoswiss',
+            'frames' => array_values($frames),
+            'updatedAt' => time(),
+            'attribution' => 'MeteoSwiss Open Data (CC BY)'
+        ];
+    }
+
     private function BuildRainbowPayload(): array
     {
         $apiKey = trim($this->ReadPropertyString('RainbowApiKey'));
-        $layer = $this->ReadPropertyString('RainbowLayer');
-        $color = min(max(0, $this->ReadPropertyInteger('RainbowColor')), 9);
+        $layer = 'precip';
+        $color = 8; // RainViewer Universal Blue / Original
 
         if ($apiKey === '') {
             $this->SendDebug(

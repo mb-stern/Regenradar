@@ -44,11 +44,15 @@ Das Modul wurde für Desktop, Tablet und Smartphone optimiert und legt besondere
 
 ### RainViewer
 
-Kostenlos nutzbar. Keine Vorhersage des Regenradars möglich.
+Kostenlos nutzbar. Keine Vorhersage des Regenradars möglich. Bilder im Abstand von 10 min.
 
-### Rainbow API
+### Rainbow
 
-Unterstützt verschiedene Layer und Farbpaletten. Vorhersage des Regenradars. Es wird ein API-Zugang benötigt. 30000 Tiles pro Monat sind kostenlos.
+Kostenpflichtig, bis 30000 Tiles pro Monat sind kostenlos. Vorhersage des Regenradars möglich. Es wird ein API-Zugang benötigt. Bilder im Abstand von 10 min.
+
+### MeteoSwiss
+
+Kostenlos nutzbar. Radarbilder für die Schweiz. Bilder im Abstand von 5 min. Kann aber auch für den Süddeutschen Raum verwendet werden.
 
 ---
 
@@ -90,11 +94,10 @@ oder
 Einstellbar sind
 
 * Radarprovider
-* Aktualisierungsintervall (bei allen Providern werden maximum alle 600sec (10min) neue Tiles geliefert.)
-* Autoplay (Vorsicht insbesondere bei kostenpflichtiegen Zugängen wie Rainbow, könnte einen hohen Tile-Verschleiss zur Folge haben.)
+* Aktualisierungsintervall
+* Autoplay (Vorsicht bei kostenpflichtiegen Zugängen wie Rainbow, hat erhöhten Tile-Verschleiss zur Folge.)
 * Tile-Debug
 * Rainbow-Layer
-* Rainbow-Farbpalette
 
 ### Darstellung
 
@@ -114,6 +117,7 @@ Die Visualisierung bietet
 * Zeitschieberegler
 * Wettervorhersage mit Detailinformationen
 * automatische Aktualisierung der Radarbilder
+* umschalten des Radar-Provider
 
 ---
 
@@ -121,7 +125,7 @@ Die Visualisierung bietet
 
 Das Modul verwendet mehrere Optimierungen:
 
-* Wiederverwendung bereits geladener Radar-Tiles
+* Wiederverwendung bereits geladener Radar-Tiles duch Java Cache
 * Aktualisierung nur bei sichtbarer Visualisierung
 * automatische Größenanpassung für Desktop und Mobilgeräte
 * minimale Netzwerklast
@@ -138,9 +142,15 @@ Feedback, Verbesserungsvorschläge und Pull Requests sind jederzeit willkommen.
 
 ## Versionen
 
+**Version 1.2 (14.07.2026)**
+* Neuer Radar-Provider 'Meteo Swiss' liefert Bilder im fünf Minuten Abstand, leider nur rings um die Schweiz.
+* Vereinheitlichung der Farben über alle Radar-Provider und Anzeige der Regenmenge in Millimeter.
+* Radar Konfiguration vereinfacht
+* Umschalten des Radarprovider über die Visu
+* Diverse kleinere Anpassungen
+
 **Version 1.1 (12.07.2026)**
 * Rückfall auf Location Control bei nicht oder nicht komplett konfigurierter OpenWeatherOneCall-Instanz.
-
 
 **Version 1.0 (11.07.2026)**
 * Inititale Version.
