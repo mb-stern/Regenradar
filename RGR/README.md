@@ -98,7 +98,6 @@ Einstellbar sind
 * Autoplay (Vorsicht bei kostenpflichtiegen Zugängen wie Rainbow, hat erhöhten Tile-Verschleiss zur Folge.)
 * Tile-Debug
 * Rainbow-Layer
-* Rainbow-Farbpalette
 
 ### Darstellung
 
