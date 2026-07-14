@@ -118,6 +118,7 @@ Die Visualisierung bietet
 * Zeitschieberegler
 * Wettervorhersage mit Detailinformationen
 * automatische Aktualisierung der Radarbilder
+* umschalten des Radar-Provider
 
 ---
 
