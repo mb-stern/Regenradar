@@ -52,7 +52,7 @@ Kostenpflichtig, bis 30000 Tiles pro Monat sind kostenlos. Vorhersage des Regenr
 
 ### MeteoSwiss
 
-Kostenlos nutzbar. Radarbilder für die Schweiz. Bilder im Abstand von 5 min.
+Kostenlos nutzbar. Radarbilder für die Schweiz. Bilder im Abstand von 5 min. Kann aber auch für den Süddeutschen Raum verwendet werden.
 
 ---
 
