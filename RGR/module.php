@@ -6,6 +6,12 @@ class Regenradar extends IPSModuleStrict
     {
         parent::Create();
 
+        $this->SetVisualizationType(
+            defined('INSTANCE_VISUALIZATION_TYPE_HTML_FULLSCREEN')
+                ? INSTANCE_VISUALIZATION_TYPE_HTML_FULLSCREEN
+                : 1
+        );
+
         $this->RegisterPropertyInteger('OpenWeatherInstanceID', 0);
         $this->RegisterPropertyInteger('TemperatureID', 0);
         $this->RegisterPropertyInteger('HumidityID', 0);
@@ -26,14 +32,17 @@ class Regenradar extends IPSModuleStrict
         $this->RegisterAttributeString('WeatherWatchIDs', '[]');
         // Signatur des zuletzt an die Visualisierung übertragenen neuesten Radarframes.
         $this->RegisterAttributeString('LastRadarFrameSignature', '');
-
-        // HTML-SDK aktivieren. 1 = individuelle Darstellung via HTML-SDK.
-        $this->SetVisualizationType(1);
     }
 
     public function ApplyChanges(): void
     {
         parent::ApplyChanges();
+
+        $this->SetVisualizationType(
+            defined('INSTANCE_VISUALIZATION_TYPE_HTML_FULLSCREEN')
+                ? INSTANCE_VISUALIZATION_TYPE_HTML_FULLSCREEN
+                : 1
+        );
 
         // Wetter- und Forecast-Variablen überwachen: bei VM_UPDATE sofort nur die Wetterdaten neu senden.
         $this->RefreshWeatherWatchRegistrations();
@@ -954,6 +963,15 @@ function wrMeteoswissColor(value) {
     return [190, 0, 170, 255];                    // kräftiges magenta / violett
 }
 
+// Leaflet imageOverlay streckt das Bild in Web Mercator, nicht linear im Breitengrad.
+function wrMeteoswissLatitude(row, height, south, north) {
+    const toMercator = lat => Math.log(Math.tan(Math.PI / 4 + lat * Math.PI / 360));
+    const top = toMercator(north);
+    const bottom = toMercator(south);
+    const projected = top - ((row + 0.5) / height) * (top - bottom);
+    return (2 * Math.atan(Math.exp(projected)) - Math.PI / 2) * 180 / Math.PI;
+}
+
 async function wrBuildMeteoswissImage(frame, layer, cacheKey) {
     try {
         const Module = await wrGetH5Module();
@@ -990,7 +1008,7 @@ async function wrBuildMeteoswissImage(frame, layer, cacheKey) {
         const scale = 1000;
 
         for (let y = 0; y < srcHeight; y++) {
-            const lat = north - ((y + 0.5) / srcHeight) * (north - south);
+            const lat = wrMeteoswissLatitude(y, srcHeight, south, north);
             for (let x = 0; x < srcWidth; x++) {
                 const lon = west + ((x + 0.5) / srcWidth) * (east - west);
                 const lv = wrLv95FromWgs84(lat, lon);
@@ -1399,6 +1417,15 @@ function wrRenderRadar(payload) {
     // Bei einer laufenden Animation den Zustand über das Radar-Update hinweg erhalten.
     const wasPlaying = wrAnimationTimer !== null;
     wrStopAnimation();
+    if (wrMap.attributionControl) {
+        const credits = {
+            rainviewer: 'Weather data by <a href="https://www.rainviewer.com/">RainViewer</a>',
+            rainbow: '<a href="https://www.rainbow.ai/">Rainbow Weather</a>',
+            meteoswiss: '<a href="https://www.meteoswiss.admin.ch/">MeteoSwiss Open Data</a> (CC BY)'
+        };
+        Object.values(credits).forEach(credit => wrMap.attributionControl.removeAttribution(credit));
+        if (credits[payload.provider]) wrMap.attributionControl.addAttribution(credits[payload.provider]);
+    }
     wrRadarPayload = payload;
 
     wrFrames = Array.isArray(payload.frames) ? payload.frames.slice() : [];
@@ -1445,7 +1472,7 @@ function wrRenderRadar(payload) {
 
     // Konfiguriertes Autoplay startet initial automatisch. Wurde die Animation
     // manuell gestartet, läuft sie nach einem Poll ebenfalls weiter.
-    if (wasPlaying || (wrConfig && wrConfig.enableAutoplay)) {
+    if (document.visibilityState === 'visible' && (wasPlaying || (wrConfig && wrConfig.enableAutoplay))) {
         wrPlayAnimation();
     }
 }
@@ -1658,8 +1685,10 @@ window.addEventListener('beforeunload', function() {
     wrStopAnimation();
 });
 
-requestAction('RefreshRadar', true);
-wrStartRadarRefreshTimer();
+if (document.visibilityState === 'visible') {
+    requestAction('RefreshRadar', true);
+    wrStartRadarRefreshTimer();
+}
 
 setTimeout(function() {
     if (wrMap) wrMap.invalidateSize();
