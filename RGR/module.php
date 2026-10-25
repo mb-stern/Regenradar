@@ -269,145 +269,430 @@ class Regenradar extends IPSModuleStrict
     <style>
         .wr-root {
             position: relative;
-            width: 100%; height: 100%; overflow: hidden;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
             font-family: system-ui, Segoe UI, Roboto, sans-serif;
-            --wr-bg: rgba(40,40,40,.88); --wr-text: #fff;
-            --wr-border: #666; --wr-btn-bg: #333; --wr-btn-fg: #fff; --wr-btn-border: #999;
-            --k: 1; --wr-height: 400px; --wr-inset: 8px;
-            --wr-fs: calc(12px * var(--k)); --wr-fs-small: calc(11px * var(--k));
-            --wr-fs-tiny: calc(10px * var(--k)); --wr-pad: calc(8px * var(--k));
-            --wr-gap: 8px; --wr-radius: 10px; --wr-icon: calc(20px * var(--k));
-            --wr-forecast-icon: calc(36px * var(--k));
-            --wr-shadow: 0 4px 14px rgba(0,0,0,.25);
-            --bg: var(--wr-bg); --text: var(--wr-text); --pad: var(--wr-pad);
-            --radius: var(--wr-radius); --fs-small: var(--wr-fs-small);
+            --wr-bg: rgba(40,40,40,0.85);
+            --wr-text: #fff;
+            --wr-panel: #2b2b2b;
+            --wr-border: #444;
+            --wr-btn-bg: #333;
+            --wr-btn-fg: #fff;
+            --wr-btn-border: #999;
+            --k: 1;
+            --wr-fs: calc(12px * var(--k));
+            --wr-fs-small: calc(11px * var(--k));
+            --wr-fs-tiny: calc(10px * var(--k));
+            --wr-pad: calc(8px * var(--k));
+            --wr-gap: calc(8px * var(--k));
+            --wr-radius: calc(10px * var(--k));
+            --wr-shadow: 0 calc(4px * var(--k)) calc(14px * var(--k)) rgba(0,0,0,.25);
+            --wr-icon: calc(20px * var(--k));
+            --wr-forecast-icon: calc(40px * var(--k));
+            --wr-legend-swatch-w: calc(18px * var(--k));
+            --wr-legend-swatch-h: calc(12px * var(--k));
+            --wr-controls-w: calc(220px * var(--k));
+            --wr-range-h: calc(22px * var(--k));
+            --wr-btn-pad-v: calc(8px * var(--k));
+            /* Script-kompatible Aliase für Tooltip-CSS */
+            --bg: var(--wr-bg);
+            --text: var(--wr-text);
+            --pad: var(--wr-pad);
+            --radius: var(--wr-radius);
+            --fs-small: var(--wr-fs-small);
         }
         .wr-root.wr-light {
-            --wr-bg: rgba(255,255,255,.93); --wr-text: #222; --wr-border: #ccc;
-            --wr-btn-bg: #fff; --wr-btn-fg: #111; --wr-btn-border: #aaa;
+            --wr-bg: rgba(255,255,255,0.90);
+            --wr-text: #222;
+            --wr-panel: #fff;
+            --wr-border: #ccc;
+            --wr-btn-bg: #fff;
+            --wr-btn-fg: #000;
+            --wr-btn-border: #ddd;
         }
-        .wr-root *, .wr-root *::before, .wr-root *::after { box-sizing: border-box; }
-        .wr-root [hidden] { display: none !important; }
-        .wr-root #map { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; }
-        .wr-layout {
-            position: absolute; inset: var(--wr-inset) var(--wr-inset) 22px;
-            z-index: 1000; display: grid; grid-template-rows: auto auto minmax(0,1fr) auto;
-            gap: 6px; min-width: 0; pointer-events: none;
+        .wr-root #map {
+            width: 100%;
+            height: 100%;
+            z-index: 0;
         }
-        .wr-top, .wr-bottom { display: flex; gap: var(--wr-gap); min-width: 0; align-items: flex-start; }
-        .wr-top { padding-left: 44px; grid-row: 1; }
-        .wr-map-space { grid-row: 3; }
-        .wr-bottom { grid-row: 4; align-items: flex-end; justify-content: space-between; }
         .wr-panel {
-            min-width: 0; max-width: 100%; pointer-events: auto;
-            background: var(--wr-bg); color: var(--wr-text); border-radius: var(--wr-radius);
-            padding: var(--wr-pad); box-shadow: var(--wr-shadow); backdrop-filter: blur(4px);
+            position: absolute;
+            z-index: 1000;
+            background: var(--wr-bg);
+            color: var(--wr-text);
+            border-radius: var(--wr-radius);
+            padding: var(--wr-pad);
+            box-shadow: var(--wr-shadow);
+            backdrop-filter: blur(4px);
             font-size: var(--wr-fs);
         }
         #wr-current {
-            flex: 0 1 auto; margin: 0 auto; display: flex; align-items: center; gap: 12px;
-            overflow-x: auto; scrollbar-width: thin; overscroll-behavior: contain;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: calc(var(--wr-gap) + 6px);
+            align-items: center;
         }
-        #wr-current .wr-value { display: flex; flex: 0 0 auto; align-items: center; gap: 4px; white-space: nowrap; }
-        #wr-current img { width: var(--wr-icon); height: var(--wr-icon); flex-shrink: 0; }
-        #wr-controls { width: 156px; flex: 0 0 156px; }
-        #wr-controls .wr-row { display: flex; gap: 4px; }
-        #wr-controls button, .wr-legend-toggle, .wr-forecast-toggle {
-            min-height: 28px; padding: 4px 6px; border: 1px solid var(--wr-btn-border);
-            border-radius: 5px; background: var(--wr-btn-bg); color: var(--wr-btn-fg);
-            font: inherit; line-height: 1.2; cursor: pointer;
+        #wr-current .wr-value {
+            display: flex;
+            align-items: center;
+            gap: calc(6px * var(--k));
+            font-size: var(--wr-fs);
+            white-space: nowrap;
         }
-        #wr-controls button { display: flex; flex: 1; min-width: 0; justify-content: center; align-items: center; }
-        .wr-root button:focus-visible, .wr-root select:focus-visible, .wr-root input:focus-visible {
-            outline: 2px solid #009fe3; outline-offset: 2px;
+        #wr-current img {
+            width: var(--wr-icon);
+            height: var(--wr-icon);
         }
-        #wr-controls label { display: block; margin-top: 4px; font-size: var(--wr-fs-small); }
-        #wr-frame-slider { display: block; min-width: 0; width: 100%; height: 22px; margin: 0; }
-        #wr-frame-time { display: block; font-size: var(--wr-fs-small); font-weight: 600; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .wr-ico { width: 14px; height: 14px; display: inline-block; }
-        .wr-ico svg { width: 100%; height: 100%; display: block; fill: currentColor; }
-        #wr-legend { position: relative; flex: 0 0 auto; font-size: var(--wr-fs-tiny); }
-        .wr-legend-header { display: flex; align-items: center; gap: 6px; }
+        #wr-legend {
+            bottom: 10px;
+            left: 10px;
+            font-size: var(--wr-fs-tiny);
+        }
+        #wr-legend .wr-legend-entry {
+            display: flex;
+            align-items: center;
+            gap: calc(var(--wr-gap) - 4px);
+            margin-bottom: calc(4px * var(--k));
+        }
+        #wr-legend .wr-legend-color {
+            width: var(--wr-legend-swatch-w);
+            height: var(--wr-legend-swatch-h);
+            border: 1px solid var(--wr-border);
+        }
+        #wr-legend .wr-legend-provider,
+        #wr-legend .wr-legend-title {
+            font-weight: 600;
+            margin-bottom: calc(4px * var(--k));
+            font-size: var(--wr-fs-tiny);
+            white-space: nowrap;
+        }
         #wr-legend .wr-provider-select {
-            min-width: 0; max-width: 100%; min-height: 28px; border: 0; background: transparent;
-            color: var(--wr-text); font: inherit; font-weight: 600; cursor: pointer;
+            display: block;
+            width: auto;
+            max-width: 100%;
+            margin: 0 0 calc(4px * var(--k));
+            padding: 0 calc(16px * var(--k)) 0 0;
+            border: 0;
+            border-radius: 0;
+            background-color: transparent;
+            color: var(--wr-text);
+            font: inherit;
+            font-weight: 600;
+            line-height: 1.2;
+            cursor: pointer;
+            appearance: auto;
+            -webkit-appearance: menulist;
         }
-        #wr-legend .wr-provider-select:disabled { cursor: progress; opacity: .65; }
-        #wr-legend .wr-provider-select option { color: #111; background: #fff; }
-        .wr-legend-toggle { display: none; }
-        .wr-forecast-toggle { display: none; margin-left: auto; }
-        .wr-legend-title { font-weight: 600; margin: 3px 0 6px; }
-        .wr-legend-entry { display: flex; align-items: center; gap: 5px; margin-bottom: 4px; white-space: nowrap; }
-        .wr-legend-color { flex: 0 0 18px; height: 12px; border: 1px solid var(--wr-border); }
-        .wr-legend-image { max-width: 100%; width: 120px; height: 10px; }
-        .wr-legend-scale { display: flex; justify-content: space-between; }
-        .wr-legend-note { max-width: 180px; margin-top: 4px; }
+        #wr-legend .wr-provider-select:focus-visible {
+            outline: 1px solid var(--wr-btn-border);
+            outline-offset: 2px;
+        }
+        #wr-legend .wr-provider-select:disabled {
+            cursor: progress;
+            opacity: .65;
+        }
+        #wr-legend .wr-provider-select option {
+            color: #111;
+            background: #fff;
+        }
+        #wr-legend .wr-legend-image {
+            display: block;
+            width: calc(120px * var(--k));
+            max-width: 100%;
+            height: calc(10px * var(--k));
+            object-fit: fill;
+            border: 1px solid var(--wr-border);
+            background: rgba(255,255,255,.08);
+            margin-bottom: calc(3px * var(--k));
+        }
+        #wr-legend .wr-legend-scale {
+            display: flex;
+            justify-content: space-between;
+            gap: calc(6px * var(--k));
+            font-size: calc(8px * var(--k));
+            opacity: .9;
+            line-height: 1.1;
+        }
+        #wr-legend .wr-legend-note {
+            margin-top: calc(3px * var(--k));
+            font-size: calc(8px * var(--k));
+            opacity: .75;
+            line-height: 1.1;
+            max-width: calc(130px * var(--k));
+        }
         #wr-forecast {
-            display: flex; flex: 0 1 auto; gap: var(--wr-gap); overflow-x: auto;
-            scrollbar-width: thin; overscroll-behavior: contain; scroll-snap-type: x proximity;
+            bottom: 10px;
+            right: 10px;
+            display: flex;
+            gap: var(--wr-gap);
+            padding: calc(var(--wr-pad) - 2px) var(--wr-pad);
+            border-radius: var(--wr-radius);
         }
-        .wr-forecast-entry { flex: 0 0 auto; min-width: 42px; text-align: center; scroll-snap-align: start; }
-        .wr-forecast-entry img { display: block; width: var(--wr-forecast-icon); height: var(--wr-forecast-icon); margin: 0 auto; }
-        .wr-day { font-weight: 600; }
-        .wr-temp { font-size: var(--wr-fs-small); white-space: nowrap; }
-        #wr-status { display: none; }
+        #wr-controls {
+            top: 10px;
+            right: 10px;
+            width: var(--wr-controls-w);
+        }
+        #wr-controls .wr-row {
+            display: flex;
+            gap: calc(var(--wr-gap) - 2px);
+            justify-content: space-between;
+            margin-bottom: calc(var(--wr-gap) - 2px);
+        }
+        #wr-controls button {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: var(--wr-btn-pad-v) 0;
+            font-size: var(--wr-fs);
+            line-height: 1;
+            gap: 6px;
+            min-width: 0;
+            border-radius: calc(var(--wr-radius) - 2px);
+            background: var(--wr-btn-bg);
+            color: var(--wr-btn-fg);
+            border: 1px solid var(--wr-btn-border);
+            -webkit-appearance: none;
+            appearance: none;
+            background-image: none;
+            box-shadow: none;
+            cursor: pointer;
+        }
+        #wr-controls button:hover { filter: brightness(1.08); }
+        #wr-controls label {
+            display: block;
+            font-size: var(--wr-fs-small);
+            margin: 6px 0 2px;
+        }
+        #wr-frame-slider {
+            width: 100%;
+            height: var(--wr-range-h);
+        }
+        #wr-frame-time {
+            display: block;
+            margin-top: 6px;
+            font-weight: 600;
+            text-align: center;
+            font-size: var(--wr-fs-small);
+            cursor: pointer;
+        }
+        .wr-ico {
+            width: 14px;
+            height: 14px;
+            display: inline-block;
+        }
+        .wr-ico svg {
+            width: 100%;
+            height: 100%;
+            display: block;
+            fill: currentColor;
+        }
+        .wr-forecast-entry {
+            text-align: center;
+            cursor: default;
+        }
+        .wr-forecast-entry img {
+            width: var(--wr-forecast-icon);
+            height: var(--wr-forecast-icon);
+        }
+        .wr-forecast-entry .wr-day {
+            font-weight: 600;
+            margin-bottom: 2px;
+            font-size: var(--wr-fs);
+        }
+        .wr-forecast-entry .wr-temp {
+            font-size: var(--wr-fs-small);
+            opacity: .9;
+        }
+        #wr-status {
+            display: none;
+        }
         #wr-tile-debug {
-            position: absolute; right: 0; top: calc(var(--wr-top-height,80px) + 6px);
-            width: max-content; max-width: min(240px,100%); max-height: var(--wr-free-height,100px); overflow: auto;
-            font-size: var(--wr-fs-tiny); line-height: 1.25;
+            top: 10px;
+            left: 58px;
+            width: max-content;
+            min-width: 0;
+            max-width: min(240px, calc(100% - 68px));
+            box-sizing: border-box;
+            display: none;
+            font-size: var(--wr-fs-small);
+            line-height: 1.25;
+            white-space: nowrap;
         }
-        .wr-debug-title { font-weight: 700; }
-        .wr-root .tooltip {
-            position: fixed; max-width: min(240px,calc(100vw - 16px)); z-index: 2000;
-            background: var(--wr-bg); color: var(--wr-text); padding: var(--wr-pad);
-            font-size: var(--wr-fs-small); border-radius: var(--wr-radius); box-shadow: var(--wr-shadow);
+        #wr-tile-debug .wr-debug-title {
+            font-weight: 700;
+            margin-bottom: 4px;
         }
-        .wr-root .leaflet-control-attribution { max-width: 100%; max-height: 18px; overflow: auto; font-size: 9px; }
-        .wr-root.wr-compact { --wr-pad: 6px; --wr-gap: 6px; }
-        .wr-compact .wr-top { flex-wrap: wrap; }
-        .wr-compact #wr-current { flex: 1 1 100%; margin: 0; }
-        .wr-compact #wr-controls {
-            flex: 0 0 calc(100% + 44px); width: calc(100% + 44px); max-width: none; display: flex; align-items: center; gap: 6px;
-            margin-left: -44px; /* Zeitleiste darf die volle Breite unter dem Zoomfeld nutzen. */
+        #wr-tile-debug .wr-debug-line {
+            opacity: .95;
         }
-        .wr-compact #wr-controls .wr-row { flex: 0 0 108px; }
-        .wr-compact #wr-controls button { min-height: 32px; }
-        .wr-compact #wr-controls label { display: none; }
-        .wr-compact #wr-frame-slider { flex: 1 1 40px; }
-        .wr-compact #wr-frame-time { flex: 0 0 58px; }
-        .wr-compact .wr-bottom { flex-direction: column; align-items: stretch; }
-        .wr-compact #wr-legend { padding: 3px 6px; }
-        .wr-compact .wr-legend-toggle { display: inline-block; }
-        .wr-compact .wr-legend-body { display: none; }
-        .wr-compact.wr-legend-open .wr-legend-body {
-            display: block; position: absolute; bottom: calc(100% + 6px); left: 0;
-            padding: 8px; background: var(--wr-bg); border-radius: var(--wr-radius);
-            max-height: var(--wr-popup-height,180px); overflow-y: auto; box-shadow: var(--wr-shadow);
+        /* Tooltip 1:1 wie im Script: gleiche Variablen, gleiche Abstände, gleicher Schatten. */
+        .tooltip {
+            position: fixed;
+            background: var(--bg);
+            color: var(--text);
+            font-size: var(--fs-small);
+            padding: calc(var(--pad) - 2px) var(--pad);
+            border-radius: var(--radius);
+            box-shadow: 0 calc(8px * var(--k)) calc(18px * var(--k)) rgba(0,0,0,.28);
+            white-space: normal;
+            line-height: 1.25;
+            max-width: calc(220px * var(--k));
+            z-index: 2000;
         }
-        .wr-compact #wr-forecast { flex: 0 1 auto; }
-        .wr-compact { --wr-forecast-icon: 28px; }
-        .wr-root.wr-tiny { --wr-pad: 4px; --wr-inset: 6px; }
-        .wr-tiny #wr-current { scrollbar-width: none; }
-        .wr-tiny #wr-current::-webkit-scrollbar { display: none; }
-        .wr-tiny #wr-controls button { min-height: 24px; }
-        .wr-tiny .wr-forecast-toggle { display: inline-block; }
-        .wr-tiny #wr-forecast { display: none; }
-        .wr-tiny.wr-forecast-open #wr-forecast {
-            display: flex; position: absolute; bottom: 40px; left: 0; right: 0;
+        @media (min-width: 701px) and (max-width: 1300px) {
+            #wr-current {
+                display: inline-flex;
+                width: max-content;
+                min-width: 340px;
+                max-width: 560px;
+            }
+            #wr-current-values { flex: 0 0 auto; }
         }
-        .wr-tiny #wr-controls .wr-row { flex-basis: 90px; }
-        .wr-tiny #wr-controls { gap: 4px; }
-        .wr-tiny .wr-legend-header { gap: 4px; }
-        .wr-tiny .wr-legend-toggle, .wr-tiny .wr-forecast-toggle { padding: 3px 4px; font-size: 10px; }
-        .wr-tiny .wr-provider-select { font-size: 11px !important; flex: 1; }
+
+        @media (min-width: 540px) {
+            #wr-controls {
+                width: 130px;
+            }
+            #wr-controls .wr-row {
+                display: grid;
+                grid-template-columns: repeat(3, 1fr);
+                column-gap: 2px;
+                margin-bottom: 6px;
+            }
+            #wr-controls button {
+                border-radius: 2px;
+                padding: 4px 0;
+                font-size: 12px;
+            }
+            #wr-controls label {
+                font-size: 12px;
+                margin: 4px 0 2px;
+            }
+            #wr-frame-slider {
+                height: 18px;
+            }
+            #wr-frame-time {
+                font-size: 12px;
+                margin-top: 4px;
+            }
+            .wr-ico {
+                width: 12px;
+                height: 12px;
+            }
+        }
+
+        @media (max-width: 700px) and (min-width: 540px) {
+            #wr-current {
+                top: 8px;
+                left: 56px;
+                right: auto;
+                transform: none;
+                display: inline-flex;
+                width: max-content;
+                min-width: 0;
+                max-width: calc(100vw - 56px - 16px - (130px + 16px));
+                justify-content: flex-end;
+                text-align: right;
+                flex-wrap: wrap;
+                gap: 6px;
+            }
+        }
+
+        @media (max-width: 700px) {
+            #wr-tile-debug {
+                left: 8px;
+                right: auto;
+                top: 8px;
+                width: max-content;
+                min-width: 0;
+                max-width: calc(100% - 16px);
+                font-size: 10px;
+                white-space: nowrap;
+            }
+        }
+
+        @media (max-width: 539px) {
+            #wr-current {
+                top: 8px;
+                left: auto;
+                right: 8px;
+                transform: none;
+                display: inline-flex;
+                width: max-content;
+                min-width: 0;
+                max-width: calc(100vw - 56px - 16px);
+                justify-content: flex-end;
+                text-align: right;
+                flex-wrap: wrap;
+                gap: 6px;
+            }
+            #wr-controls {
+                left: auto;
+                right: 8px;
+                width: 120px;
+            }
+            #wr-controls .wr-row {
+                gap: 4px;
+                margin-bottom: 6px;
+                display: flex;
+            }
+            #wr-controls button {
+                padding: 6px 0;
+                font-size: 11px;
+                border-radius: 6px;
+            }
+            #wr-controls label {
+                font-size: 10px;
+                margin: 4px 0 2px;
+            }
+            #wr-frame-slider {
+                height: 16px;
+            }
+            #wr-frame-time {
+                font-size: 10px;
+                margin-top: 4px;
+            }
+        }
+
+        /* Nur ganz am Schluss / sehr kleine Handybreite: Vorhersage rechts moderat kompakter. */
+        @media (max-width: 430px) {
+            #wr-forecast {
+                max-width: min(200px, calc(100% - 120px));
+                padding: 4px 5px;
+                gap: 3px;
+            }
+
+            .wr-forecast-entry {
+                flex-basis: 26px;
+                min-width: 26px;
+            }
+
+            .wr-forecast-entry img {
+                width: 22px;
+                height: 22px;
+            }
+
+            .wr-forecast-entry .wr-day {
+                font-size: 8px;
+            }
+
+            .wr-forecast-entry .wr-temp {
+                font-size: 8px;
+            }
+        }
 
     </style>
 
     <div id="map"></div>
 
-    <div class="wr-layout">
-    <div class="wr-top">
-    <div id="wr-current" class="wr-panel" tabindex="0" aria-label="Aktuelle Wetterwerte">
+    <div id="wr-tile-debug" class="wr-panel"></div>
+
+    <div id="wr-current" class="wr-panel">
         <div class="wr-value"><img src="https://raw.githubusercontent.com/basmilius/weather-icons/dev/production/fill/svg/thermometer.svg" alt=""><span id="wr-temp">–</span></div>
         <div class="wr-value"><img src="https://raw.githubusercontent.com/basmilius/weather-icons/dev/production/fill/svg/humidity.svg" alt=""><span id="wr-humidity">–</span></div>
         <div class="wr-value"><img src="https://raw.githubusercontent.com/basmilius/weather-icons/dev/production/fill/svg/wind.svg" alt=""><span id="wr-wind">–</span></div>
@@ -432,15 +717,9 @@ class Regenradar extends IPSModuleStrict
         <span id="wr-frame-time">⏳</span>
     </div>
 
-    </div>
-    <div id="wr-tile-debug" class="wr-panel"></div>
-    <div class="wr-map-space" aria-hidden="true"></div>
-    <div class="wr-bottom">
     <div id="wr-legend" class="wr-panel"></div>
 
-    <div id="wr-forecast" class="wr-panel" tabindex="0" aria-label="Wettervorhersage"></div>
-    </div>
-    </div>
+    <div id="wr-forecast" class="wr-panel"></div>
     <div id="wr-status" class="wr-panel">Initialisierung...</div>
 </div>
 
@@ -448,6 +727,18 @@ class Regenradar extends IPSModuleStrict
 <script src="https://cdn.jsdelivr.net/npm/h5wasm@0.10.3/dist/iife/h5wasm.min.js"></script>
 
 <script>
+(function wrScaleByTile(){
+    function computeK(){
+        const w = document.documentElement.clientWidth || window.innerWidth || 800;
+        const k = Math.max(0.75, Math.min(1.0, w / 780));
+        const root = document.getElementById('wetterradar-root');
+        if (root) root.style.setProperty('--k', k.toFixed(3));
+        if (window.wrMapRef && window.wrMapRef.invalidateSize) setTimeout(function() { window.wrMapRef.invalidateSize(); }, 0);
+    }
+    computeK();
+    window.addEventListener('resize', computeK);
+})();
+
 const WR_INITIAL = {$initialJson};
 const WR_ICON_URL = "https://raw.githubusercontent.com/basmilius/weather-icons/dev/production/fill/svg/";
 const WR_ICON_MAP = {
@@ -970,15 +1261,13 @@ function wrRenderForecast(forecast) {
     if (!box) return;
 
     box.innerHTML = '';
-    const forecastToggle = document.querySelector('.wr-forecast-toggle');
-    if (forecastToggle) forecastToggle.hidden = !Array.isArray(forecast) || forecast.length === 0;
 
     if (!Array.isArray(forecast) || forecast.length === 0) {
-        box.hidden = true;
+        box.style.display = 'none';
         return;
     }
 
-    box.hidden = false;
+    box.style.display = 'flex';
 
     forecast.forEach(function(f) {
         if (!f || !f.dt) return;
@@ -1024,14 +1313,6 @@ function wrRenderLegend(legend) {
 
     box.style.display = 'block';
     box.innerHTML = '';
-    const root = document.getElementById('wetterradar-root');
-    const header = document.createElement('div');
-    header.className = 'wr-legend-header';
-    const body = document.createElement('div');
-    body.className = 'wr-legend-body';
-    body.id = 'wr-legend-body';
-    box.appendChild(header);
-    box.appendChild(body);
 
     if (legend.provider) {
         const providerNames = {
@@ -1070,37 +1351,14 @@ function wrRenderLegend(legend) {
                 wrStartRadarRefreshTimer();
             }
         });
-        header.appendChild(providerSelect);
+        box.appendChild(providerSelect);
     }
-
-    function addToggle(className, text, stateClass, target) {
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.className = className;
-        button.textContent = text;
-        button.setAttribute('aria-controls', target);
-        button.setAttribute('aria-expanded', String(!!root && root.classList.contains(stateClass)));
-        button.addEventListener('click', function() {
-            if (!root) return;
-            const open = root.classList.toggle(stateClass);
-            button.setAttribute('aria-expanded', String(open));
-            if (open) {
-                const otherState = stateClass === 'wr-legend-open' ? 'wr-forecast-open' : 'wr-legend-open';
-                root.classList.remove(otherState);
-                const other = header.querySelector(stateClass === 'wr-legend-open' ? '.wr-forecast-toggle' : '.wr-legend-toggle');
-                if (other) other.setAttribute('aria-expanded', 'false');
-            }
-        });
-        header.appendChild(button);
-    }
-    addToggle('wr-legend-toggle', 'Skala', 'wr-legend-open', 'wr-legend-body');
-    addToggle('wr-forecast-toggle', 'Vorhersage', 'wr-forecast-open', 'wr-forecast');
 
     if (legend.title) {
         const title = document.createElement('div');
         title.className = 'wr-legend-title';
         title.textContent = legend.title;
-        body.appendChild(title);
+        box.appendChild(title);
     }
 
     if (legend.type === 'image' && legend.image) {
@@ -1108,18 +1366,18 @@ function wrRenderLegend(legend) {
         img.className = 'wr-legend-image';
         img.alt = legend.title || 'Radar-Farbskala';
         img.src = legend.image;
-        body.appendChild(img);
+        box.appendChild(img);
 
         const scale = document.createElement('div');
         scale.className = 'wr-legend-scale';
         scale.innerHTML = '<span>leicht</span><span>stark</span>';
-        body.appendChild(scale);
+        box.appendChild(scale);
 
         if (legend.note) {
             const note = document.createElement('div');
             note.className = 'wr-legend-note';
             note.textContent = legend.note;
-            body.appendChild(note);
+            box.appendChild(note);
         }
         return;
     }
@@ -1131,14 +1389,14 @@ function wrRenderLegend(legend) {
             row.innerHTML =
                 '<div class="wr-legend-color" style="background:' + wrEscapeHtml(entry.color || '#999') + ';"></div> ' +
                 wrEscapeHtml(entry.label || '');
-            body.appendChild(row);
+            box.appendChild(row);
         });
     }
     if (legend.note) {
         const note = document.createElement('div');
         note.className = 'wr-legend-note';
         note.textContent = legend.note;
-        body.appendChild(note);
+        box.appendChild(note);
     }
 }
 
@@ -1331,51 +1589,124 @@ function wrHandleRadarVisibilityChange(){
         wrStopAnimation();
     }
 }
-function wrObserveLayout() {
+function wrPlaceControlsOnPhone() {
     const root = document.getElementById('wetterradar-root');
-    if (!root) return;
-    let frame = null;
-    let previousSize = '';
-    function update() {
-        if (frame !== null) return;
-        frame = requestAnimationFrame(function() {
-            frame = null;
-            const width = root.clientWidth;
-            const height = root.clientHeight;
-            if (!width || !height) { previousSize = ''; return; }
-            const size = width + 'x' + height;
-            const resized = size !== previousSize;
-            previousSize = size;
-            root.classList.toggle('wr-compact', width < 720 || height < 480);
-            root.classList.toggle('wr-tiny', height < 260);
-            root.style.setProperty('--wr-height', height + 'px');
-            root.style.setProperty('--k', String(Math.max(1, Math.min(1.2, width / 1200, height / 650))));
-            const top = root.querySelector('.wr-top').getBoundingClientRect();
-            const bottom = root.querySelector('.wr-bottom').getBoundingClientRect();
-            root.style.setProperty('--wr-top-height', top.height + 'px');
-            root.style.setProperty('--wr-free-height', Math.max(0, bottom.top - top.bottom - 12) + 'px');
-            root.style.setProperty('--wr-popup-height', Math.min(height - 70, Math.max(80, bottom.top - top.bottom - 12)) + 'px');
-            if (resized) {
-                wrRemoveTooltip();
-                if (wrMap) wrMap.invalidateSize({pan: true, animate: false});
+    const controls = document.getElementById('wr-controls');
+    const current = document.getElementById('wr-current');
+    const debug = document.getElementById('wr-tile-debug');
+    if (!root || !controls || !current) return;
+
+    let positionFrame = null;
+
+    function updateNow() {
+        const rootRect = root.getBoundingClientRect();
+        const isPhone = window.matchMedia('(max-width: 539px)').matches;
+        const isSmall = window.matchMedia('(max-width: 700px)').matches;
+
+        if (isPhone) {
+            const currentRect = current.getBoundingClientRect();
+            const controlsTop = Math.max(8, currentRect.bottom - rootRect.top + 3);
+            controls.style.top = controlsTop + 'px';
+        } else {
+            controls.style.top = '10px';
+        }
+
+        if (debug) {
+            if (isSmall) {
+                const currentRect = current.getBoundingClientRect();
+                const controlsRect = controls.getBoundingClientRect();
+                const gap = 6;
+
+                // MOBILE TILE-DEBUG FIX v2:
+                // Linke Kante = linke Kante der Wetterdatenbox.
+                // Obere Kante = obere Kante des Steuerfelds.
+                // Rechte Kante endet vor dem Steuerfeld.
+                const left = Math.max(8, Math.round(currentRect.left - rootRect.left));
+                const top = Math.max(8, Math.round(controlsRect.top - rootRect.top));
+                const controlsLeft = Math.round(controlsRect.left - rootRect.left);
+                const availableWidth = Math.max(0, controlsLeft - left - gap);
+
+                debug.style.setProperty('left', left + 'px', 'important');
+                debug.style.setProperty('right', 'auto', 'important');
+                debug.style.setProperty('top', top + 'px', 'important');
+                debug.style.setProperty('min-width', '0', 'important');
+                debug.style.setProperty('box-sizing', 'border-box', 'important');
+
+                // Zuerst natürliche Textbreite ohne Umbruch bestimmen.
+                debug.style.setProperty('width', 'max-content', 'important');
+                debug.style.setProperty('max-width', 'none', 'important');
+                debug.style.setProperty('white-space', 'nowrap', 'important');
+                const naturalWidth = Math.ceil(debug.getBoundingClientRect().width);
+
+                // Nur den tatsächlich benötigten Platz verwenden, jedoch nie ins Steuerfeld ragen.
+                const finalWidth = Math.min(naturalWidth, availableWidth);
+                debug.style.setProperty('width', Math.max(0, finalWidth) + 'px', 'important');
+                debug.style.setProperty('max-width', Math.max(0, availableWidth) + 'px', 'important');
+                debug.style.setProperty(
+                    'white-space',
+                    naturalWidth > availableWidth ? 'normal' : 'nowrap',
+                    'important'
+                );
+                debug.style.setProperty('overflow-wrap', 'anywhere', 'important');
+            } else {
+                debug.style.removeProperty('right');
+                debug.style.setProperty('top', '10px', 'important');
+                debug.style.setProperty('left', '58px', 'important');
+                debug.style.setProperty('width', 'max-content', 'important');
+                debug.style.setProperty('max-width', 'min(240px, calc(100% - 68px))', 'important');
+                debug.style.setProperty('white-space', 'nowrap', 'important');
+                debug.style.removeProperty('overflow-wrap');
             }
+        }
+
+        if (wrMap && wrMap.invalidateSize) {
+            setTimeout(function() { wrMap.invalidateSize(); }, 0);
+        }
+    }
+
+    function update() {
+        if (positionFrame !== null) {
+            cancelAnimationFrame(positionFrame);
+        }
+        positionFrame = requestAnimationFrame(function() {
+            positionFrame = null;
+            updateNow();
         });
     }
-    if (typeof ResizeObserver !== 'undefined') {
-        const observer = new ResizeObserver(update);
-        observer.observe(root);
-        observer.observe(root.querySelector('.wr-top'));
-        observer.observe(root.querySelector('.wr-bottom'));
-    }
+
+    update();
     window.addEventListener('resize', update);
     window.addEventListener('orientationchange', update);
-    update();
+
+    try {
+        const observer = new ResizeObserver(update);
+        observer.observe(root);
+        observer.observe(current);
+        observer.observe(controls);
+    } catch(e) {}
+
+    if (debug) {
+        try {
+            new MutationObserver(update).observe(debug, {
+                childList: true,
+                subtree: true,
+                characterData: true,
+                attributes: true,
+                attributeFilter: ['style', 'class']
+            });
+        } catch(e) {}
+    }
+
+    // Nach Aufbau und Schrift-/Layoutberechnung nochmals sicher positionieren.
+    setTimeout(update, 0);
+    setTimeout(update, 100);
+    setTimeout(update, 300);
 }
 
 
 wrSetupControls();
 wrHandlePayload(WR_INITIAL);
-wrObserveLayout();
+wrPlaceControlsOnPhone();
 
 // WR_INITIAL kann von IP-Symcon aus einem bereits erzeugten HTML stammen.
 // Deshalb beim tatsächlichen Öffnen der sichtbaren Visualisierung immer

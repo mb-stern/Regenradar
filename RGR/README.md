@@ -115,10 +115,6 @@ Kartenzoom ist bis 18 möglich. RainViewer liefert native Radardetails bis Zoom 
 
 RainViewer zeigt etwa zwei Stunden Vergangenheit ohne Vorschau. Rainbow zeigt zwei Stunden Vergangenheit und je nach Einstellung bis vier Stunden Vorschau (Standard eine Stunde). MeteoSchweiz zeigt die letzten zwölf Messbilder ohne Vorschau.
 
-## Anpassung an die Kachelgröße
-
-Die Anordnung passt sich automatisch an Breite und Höhe der Kachel an. In kleineren Kacheln öffnet „Skala“ die Farbskala; der Providerwechsel bleibt sichtbar. In sehr flachen Kacheln öffnet „Vorhersage“ die Wettertage. Bei Platzmangel sind Wetterwerte und Vorhersagetage horizontal scrollbar. Beim Vergrößern erscheinen die Zusatzinformationen wieder direkt. Der Kartenausschnitt bleibt beim Größenwechsel erhalten.
-
 ## Bedienung
 
 Den Radarprovider direkt im Auswahlfeld über der Farbskala wechseln. Die Kachel behält dabei Kartenausschnitt und Zoom bei. Für Rainbow muss ein API-Schlüssel in der Modulkonfiguration hinterlegt sein.

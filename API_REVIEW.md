@@ -119,29 +119,12 @@ Live-Beobachtung am 25.10.2026 um 19:44 UTC: Das neueste MeteoSchweiz-RZC-Asset 
 Regressionstests decken die Providergrenzen sowie kürzere konfigurierte Intervalle ab.
 
 
-## Anpassung an Kachelgrößen und Rainbow-Anzeige
-
-Die Anordnung richtet sich jetzt nach der tatsächlichen Breite und Höhe des Kachel-Containers, nicht nur nach der Fensterbreite. Ein ResizeObserver erfasst auch Größenänderungen innerhalb einer unveränderten Browseransicht. Leaflet wird ohne Animation auf die neue Fläche angepasst; der geografische Mittelpunkt bleibt erhalten. Bei vorübergehend unsichtbaren Kacheln wird die Größe nach dem Einblenden neu gesetzt.
-
-- Große Kacheln zeigen die vollständige Farbskala und Vorhersage direkt.
-- Unter 720 Pixel Breite oder 480 Pixel Höhe wird die Zeitleiste flach angeordnet und die Skala über „Skala“ aufklappbar. Der Providerwechsel bleibt sichtbar.
-- Unter 260 Pixel Höhe wird auch die Vorhersage separat aufklappbar. Skala und Vorhersage öffnen sich dort gegenseitig ablösend.
-- Wetterwerte und Vorhersagetage lassen sich bei Platzmangel horizontal scrollen und per Tastatur fokussieren. Texte werden nicht beliebig verkleinert. Auf sehr kleinen Kacheln sind bewusst nicht alle Zusatzinformationen gleichzeitig offen.
-- Diagnoseinformationen sind auf den freien Kartenbereich begrenzt; die bisherigen konkurrierenden Resize-/Mutation-Positionierungsschleifen wurden entfernt.
-
-`tests/layout.cjs` verwendet echtes Chromium und Leaflet mit lokalen, synthetischen Daten. Geprüft werden zehn Größenwechsel zwischen 240 × 160 und 1600 × 900, Panelgrenzen, Überlappungen in der normalen Ansicht, Erhalt des Kartenzentrums, Kartenabmessungen, Skala-/Vorhersage-Schalter, Diagnosebereich und eine im unsichtbaren Zustand neu erzeugte Karte. Die externen Daten- und Bildabrufe sind in diesem Test gezielt blockiert; dies ist kein API-Livetest.
+## Rainbow-Anzeige (dynamische Layoutüberarbeitung zurückgesetzt)
 
 Nach wiederholt gemeldeten leeren Rainbow-Bildern wurde die zusätzliche CORS-/Canvas-Abhängigkeit aus der Rainbow-Anzeige entfernt: Die API liefert wieder fertig eingefärbte PNGs mit `color=8`, Leaflet zeigt sie als normale Bilder an. Die Regenpalette bleibt Universal Blue. Eine identische Schneefärbung mit MeteoSchweiz kann bei den Anbieter-PNGs nicht garantiert werden. Die präzise Ursache des gemeldeten Ausfalls wurde ohne authentifizierten Live-Zugriff nicht nachgewiesen; die Rohdaten-Umfärbung ist ein beseitigter möglicher Fehlerpfad, kein bestätigter API-Defekt.
 
 Schlagen alle Tiles einer abgeschlossenen Ladegruppe fehl, zeigt die Zeitzeile nun einen Ladefehler, statt eine leere Karte nur mit gültigem Framezeitstempel zu präsentieren. Erfolgreiches Nachladen setzt den Fehler zurück. Die neuen Tests prüfen beide Zustände. Datenzeitpunkte und Providerintervalle werden nicht künstlich verschoben. Normale Bewölkung wird weiterhin bei keinem Provider hinzugefügt.
 
-Für den Layouttest nach `php tests/module.php fallback /tmp/regenradar-test.js`:
-
-```sh
-node tests/layout.cjs /tmp/regenradar-test.js.html /tmp/leaflet.js /tmp/leaflet.css
-```
-
-Dafür muss wie für `tests/browser.cjs` ein lokaler Chromium-CDP-Endpunkt auf Port 9222 laufen. Leaflet 1.9.4 und dessen CSS werden lokal bereitgestellt. Tests erfolgen weiterhin zusätzlich zu einer noch offenen Bedien- und API-Prüfung in der echten Symcon-Instanz.
 
 ## Wiederkehrend leere Rainbow-Regenzellen: Cache und Live-Diagnose
 
@@ -155,3 +138,8 @@ In der Modulkonfiguration gibt es jetzt **„Rainbow-Verbindung prüfen“** (`R
 Die Ausgabe enthält ausschließlich Status und Einordnung, den Datenzeitpunkt und das Ergebnis einer PNG-Prüfung. Schlüssel, URLs mit Tokens und Antworttexte werden nicht ausgegeben. Auch reguläre HTTP-Debug-Meldungen enthalten nun keine URL-Queryparameter mehr. 401 (Schlüssel), 403 (Berechtigung/Tarif), 404 (Frame/Tile), 429 (Limit), Anbieterfehler und Transportfehler sind unterscheidbar. Ein gültiges PNG beweist Erreichbarkeit, aber weder Regen am Standort noch einen erfolgreichen Browserabruf.
 
 Der native PHP-HTTP-Transport wurde gegen einen lokalen HTTP-Testserver mit 200/401 geprüft; das Diagnoseverhalten mit isolierten Antworten für Erfolg und Fehler. Authentifizierte Rainbow-Liveantworten sind hier weiterhin nicht verfügbar. Für die weitere Eingrenzung in der betroffenen Symcon-Instanz den neuen Knopf betätigen und dessen schlüsselfreie Textausgabe verwenden. Es werden weiterhin ausschließlich Niederschlagsbilder dargestellt.
+
+
+## Rücknahme der letzten dynamischen Layoutänderung
+
+Auf Nutzerwunsch wurden CSS, Anordnung, Legende, Vorhersage und Größenpositionierung auf den Stand vor der letzten Layoutüberarbeitung (`44b3c6a`) zurückgesetzt. Die neu eingeführten aufklappbaren Bereiche und der dazugehörige Layouttest wurden entfernt. Die ursprüngliche Größenanpassung bleibt bestehen. Die regulären Rainbow-PNGs, Wiederholung fehlgeschlagener Layer, Fehlermeldungen, API-Diagnose, HTML-SDK-Vollbildunterstützung und Providerwechsel bleiben erhalten.
