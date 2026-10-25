@@ -87,3 +87,14 @@ check($module->properties['RadarProvider'] === 'rainbow', 'Provider action must 
 $last = end($module->messages);
 check($last['type'] === 'reload' && $last['data']['config']['radarProvider'] === 'rainbow', 'Provider switch must send the new configuration');
 echo "PASS provider switch action and updated visualization payload\n";
+
+$configMethod = new ReflectionMethod(Regenradar::class, 'BuildClientConfig');
+foreach (['rainviewer' => 600, 'rainbow' => 600, 'meteoswiss' => 300] as $provider => $cap) {
+    $module->properties['RadarProvider'] = $provider;
+    foreach ([0 => 60, 60 => 60, 120 => 120, 600 => $cap, 3600 => $cap] as $requested => $expected) {
+        $module->properties['RadarRefreshSeconds'] = $requested;
+        $config = $configMethod->invoke($module);
+        check($config['radarRefreshSeconds'] === $expected, 'Refresh interval must respect provider cadence and minimum');
+    }
+}
+echo "PASS provider refresh cadence and configured faster intervals\n";

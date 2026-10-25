@@ -173,7 +173,7 @@ class Regenradar extends IPSModuleStrict
                                 ['caption' => '4 Stunden', 'value' => 4],
                             ],
                         ],
-                        ['type' => 'NumberSpinner', 'name' => 'RadarRefreshSeconds', 'caption' => 'Radar aktualisieren alle Sekunden', 'minimum' => 60],
+                        ['type' => 'NumberSpinner', 'name' => 'RadarRefreshSeconds', 'caption' => 'Radar-Abrufintervall (Sekunden, höchstens Providerintervall)', 'minimum' => 60],
                         ['type' => 'CheckBox', 'name' => 'EnableAutoplay', 'caption' => 'Autoplay aktivieren'],
                         ['type' => 'CheckBox', 'name' => 'ShowTileDebug', 'caption' => 'Tile-Debug im HTML anzeigen'],
                     ],
@@ -1828,7 +1828,7 @@ HTML;
             'theme' => $this->ReadPropertyString('Theme'),
             'radarProvider' => $provider,
             'radarMaxZoom' => $radarMaxZoom,
-            'radarRefreshSeconds' => max(60, $this->ReadPropertyInteger('RadarRefreshSeconds')),
+            'radarRefreshSeconds' => $this->GetRadarRefreshSeconds(),
             'enableAutoplay' => $this->ReadPropertyBoolean('EnableAutoplay'),
             'showTileDebug' => $this->ReadPropertyBoolean('ShowTileDebug'),
             'legend' => $this->BuildRadarLegendPayload(),
@@ -1837,6 +1837,13 @@ HTML;
             'mapAttribution' => $mapAttribution,
             'mapSubdomains' => $subdomains
         ];
+    }
+
+    private function GetRadarRefreshSeconds(): int
+    {
+        // Ein konfiguriertes 10-Minuten-Intervall darf MeteoSwiss-Frames nicht überspringen.
+        $providerInterval = $this->ReadPropertyString('RadarProvider') === 'meteoswiss' ? 300 : 600;
+        return min($providerInterval, max(60, $this->ReadPropertyInteger('RadarRefreshSeconds')));
     }
 
     private function RefreshWeatherWatchRegistrations(): void
@@ -2181,7 +2188,15 @@ HTML;
         }
 
         $snapshotUrl = 'https://api.rainbow.ai/tiles/v1/snapshot?layer=' . rawurlencode($layer);
-        $json = $this->HttpGet($snapshotUrl, ['Ocp-Apim-Subscription-Key: ' . $apiKey], 10);
+        $json = $this->HttpGet(
+            $snapshotUrl,
+            [
+                'Ocp-Apim-Subscription-Key: ' . $apiKey,
+                'Cache-Control: no-cache',
+                'Pragma: no-cache'
+            ],
+            10
+        );
         $data = json_decode($json, true);
         $snapshot = (is_array($data) && isset($data['snapshot'])) ? (int) $data['snapshot'] : 0;
 

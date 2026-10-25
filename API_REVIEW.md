@@ -105,3 +105,13 @@ Ein authentifizierter Rainbow-Rohdaten-/CORS-Livetest ist weiterhin mangels Schl
 Das Auswahlfeld oberhalb der Farbskala bietet RainViewer, Rainbow und MeteoSchweiz an. Der vorhandene Symcon-Aufruf `SetRadarProvider` speichert die Auswahl in der Instanz und löst `ApplyChanges()` aus. Der neue Payload aktualisiert die Kachel jetzt direkt, statt das Symcon-Iframe über `window.location.reload()` neu zu laden. Karte, Legende, Radarframes und Timer werden erneuert; beim Providerwechsel bleiben Kartenausschnitt und Zoom erhalten. Beim Themewechsel wird die Hell-/Dunkelklasse korrekt umgeschaltet. Ein unmittelbar fehlgeschlagener RequestAction-Aufruf gibt das Auswahlfeld wieder frei und zeigt einen Fehler.
 
 Der PHP-Test prüft die Aktion einschließlich aktualisiertem Konfigurationspayload. Der Chromium-Test betätigt das echte HTML-Auswahlfeld für alle drei Provider und prüft Aktionsparameter, erneutes Freigeben, Kartenposition, Aktualisierung und synchrone Fehlerbehandlung. Der Host-Payload wird dabei simuliert; ein Live-Wechsel in IP-Symcon ist weiterhin offen. Rainbow kann ausgewählt werden, benötigt für Daten aber einen hinterlegten API-Schlüssel. Die Auswahl gilt wie bisher für die gesamte Symcon-Instanz, nicht nur für einen einzelnen Browser.
+
+## Bildalter und Abrufintervalle
+
+Das Modul begrenzt den konfigurierten Metadaten-Abrufabstand jetzt auf das Providerintervall: MeteoSchweiz maximal 300 Sekunden, Rainbow/RainViewer maximal 600 Sekunden. Kürzere konfigurierte Abstände bleiben erhalten (Minimum 60 Sekunden). Damit kann das bisherige Standardintervall von zehn Minuten nicht mehr jeden zweiten MeteoSchweiz-Abruf auslassen. Die Abrufe erfolgen weiterhin nur bei sichtbarer Kachel; ihre Phase ist nicht an den Veröffentlichungszeitpunkt des Anbieters gekoppelt.
+
+Rainbow-Snapshot-Abfragen senden zusätzlich `Cache-Control: no-cache` und `Pragma: no-cache`, damit ein HTTP-Cache den Snapshot vor Verwendung revalidieren soll. Das ist keine Garantie, dass der Anbieter bereits neue Daten veröffentlicht hat. Authentifizierte Rainbow-Aktualität bleibt mangels Schlüssel ungetestet.
+
+Live-Beobachtung am 25.10.2026 um 19:44 UTC: Das neueste MeteoSchweiz-RZC-Asset trug 19:40 UTC im Dateinamen und wurde laut STAC-Metadaten erst um 19:43:57 UTC erstellt. Fünf Minuten Bildabstand bedeuten daher nicht fünf Minuten Vorschau oder verzögerungsfreie Verfügbarkeit. Die Anzeige verwendet weiterhin die echten Provider-Zeitstempel und erfindet keinen Zukunftsversatz. Rainbow startet weiterhin beim neuesten gelieferten Snapshot; Zukunftsframes sind separat per Zeitschieber wählbar.
+
+Regressionstests decken die Providergrenzen sowie kürzere konfigurierte Intervalle ab.
