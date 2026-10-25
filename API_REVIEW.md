@@ -1,3 +1,5 @@
+> Aktueller Stand: Rainbow verwendet wieder reguläre Universal-Blue-PNG-Tiles (Palette 8). Die frühere Rohdaten-Umfärbung wurde wegen der gemeldeten Anzeigeausfälle entfernt. Details und Grenzen stehen im letzten Abschnitt.
+
 # API- und Fehlerprüfung (25.10.2026)
 
 Änderungen erfolgen im Branch `development`.
@@ -115,3 +117,28 @@ Rainbow-Snapshot-Abfragen senden zusätzlich `Cache-Control: no-cache` und `Prag
 Live-Beobachtung am 25.10.2026 um 19:44 UTC: Das neueste MeteoSchweiz-RZC-Asset trug 19:40 UTC im Dateinamen und wurde laut STAC-Metadaten erst um 19:43:57 UTC erstellt. Fünf Minuten Bildabstand bedeuten daher nicht fünf Minuten Vorschau oder verzögerungsfreie Verfügbarkeit. Die Anzeige verwendet weiterhin die echten Provider-Zeitstempel und erfindet keinen Zukunftsversatz. Rainbow startet weiterhin beim neuesten gelieferten Snapshot; Zukunftsframes sind separat per Zeitschieber wählbar.
 
 Regressionstests decken die Providergrenzen sowie kürzere konfigurierte Intervalle ab.
+
+
+## Anpassung an Kachelgrößen und Rainbow-Anzeige
+
+Die Anordnung richtet sich jetzt nach der tatsächlichen Breite und Höhe des Kachel-Containers, nicht nur nach der Fensterbreite. Ein ResizeObserver erfasst auch Größenänderungen innerhalb einer unveränderten Browseransicht. Leaflet wird ohne Animation auf die neue Fläche angepasst; der geografische Mittelpunkt bleibt erhalten. Bei vorübergehend unsichtbaren Kacheln wird die Größe nach dem Einblenden neu gesetzt.
+
+- Große Kacheln zeigen die vollständige Farbskala und Vorhersage direkt.
+- Unter 720 Pixel Breite oder 480 Pixel Höhe wird die Zeitleiste flach angeordnet und die Skala über „Skala“ aufklappbar. Der Providerwechsel bleibt sichtbar.
+- Unter 260 Pixel Höhe wird auch die Vorhersage separat aufklappbar. Skala und Vorhersage öffnen sich dort gegenseitig ablösend.
+- Wetterwerte und Vorhersagetage lassen sich bei Platzmangel horizontal scrollen und per Tastatur fokussieren. Texte werden nicht beliebig verkleinert. Auf sehr kleinen Kacheln sind bewusst nicht alle Zusatzinformationen gleichzeitig offen.
+- Diagnoseinformationen sind auf den freien Kartenbereich begrenzt; die bisherigen konkurrierenden Resize-/Mutation-Positionierungsschleifen wurden entfernt.
+
+`tests/layout.cjs` verwendet echtes Chromium und Leaflet mit lokalen, synthetischen Daten. Geprüft werden zehn Größenwechsel zwischen 240 × 160 und 1600 × 900, Panelgrenzen, Überlappungen in der normalen Ansicht, Erhalt des Kartenzentrums, Kartenabmessungen, Skala-/Vorhersage-Schalter, Diagnosebereich und eine im unsichtbaren Zustand neu erzeugte Karte. Die externen Daten- und Bildabrufe sind in diesem Test gezielt blockiert; dies ist kein API-Livetest.
+
+Nach wiederholt gemeldeten leeren Rainbow-Bildern wurde die zusätzliche CORS-/Canvas-Abhängigkeit aus der Rainbow-Anzeige entfernt: Die API liefert wieder fertig eingefärbte PNGs mit `color=8`, Leaflet zeigt sie als normale Bilder an. Die Regenpalette bleibt Universal Blue. Eine identische Schneefärbung mit MeteoSchweiz kann bei den Anbieter-PNGs nicht garantiert werden. Die präzise Ursache des gemeldeten Ausfalls wurde ohne authentifizierten Live-Zugriff nicht nachgewiesen; die Rohdaten-Umfärbung ist ein beseitigter möglicher Fehlerpfad, kein bestätigter API-Defekt.
+
+Schlagen alle Tiles einer abgeschlossenen Ladegruppe fehl, zeigt die Zeitzeile nun einen Ladefehler, statt eine leere Karte nur mit gültigem Framezeitstempel zu präsentieren. Erfolgreiches Nachladen setzt den Fehler zurück. Die neuen Tests prüfen beide Zustände. Datenzeitpunkte und Providerintervalle werden nicht künstlich verschoben. Normale Bewölkung wird weiterhin bei keinem Provider hinzugefügt.
+
+Für den Layouttest nach `php tests/module.php fallback /tmp/regenradar-test.js`:
+
+```sh
+node tests/layout.cjs /tmp/regenradar-test.js.html /tmp/leaflet.js /tmp/leaflet.css
+```
+
+Dafür muss wie für `tests/browser.cjs` ein lokaler Chromium-CDP-Endpunkt auf Port 9222 laufen. Leaflet 1.9.4 und dessen CSS werden lokal bereitgestellt. Tests erfolgen weiterhin zusätzlich zu einer noch offenen Bedien- und API-Prüfung in der echten Symcon-Instanz.

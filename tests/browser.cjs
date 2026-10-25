@@ -4,6 +4,7 @@ const {readFileSync} = require('node:fs');
 (async () => {
     const source = readFileSync(process.argv[2] || '/tmp/regenradar-test.js', 'utf8');
     const functions = source.slice(source.indexOf('function wrRadarColor('), source.indexOf('// Leaflet imageOverlay'));
+    const tileFunctions = source.slice(source.indexOf('function wrBuildRadarLayer('), source.indexOf('function wrRadarCacheKey('));
     const legendFunctions = source.slice(source.indexOf('function wrEscapeHtml('), source.indexOf('function wrRenderWeather('));
     const payloadFunction = source.slice(source.indexOf('function wrHandlePayload('), source.indexOf('function handleMessage('));
     const palette = readFileSync(__dirname + '/../RGR/radar-palette.json', 'utf8');
@@ -11,8 +12,11 @@ const {readFileSync} = require('node:fs');
     const html = `<html><body><pre id="result">PENDING</pre><div id="wr-legend"></div><span id="wr-frame-time"></span><script>${leaflet}</script><script>
 let wrConfig={radarPalette:${palette},radarProvider:"rainviewer",radarMaxZoom:18};
 ${functions}
+${tileFunctions}
 ${legendFunctions}
 ${payloadFunction}
+const wrRadarPayload={provider:'rainbow'};
+function wrRadarCacheKey(){return 'test';} function wrAttachTileDebug(layer){return layer;}
 let wrData, wrBaseLayer, removed=0, refreshes=0, actions=[], failAction=false;
 const initialCenter={lat:47.3,lng:8.5};
 function makeMap() {return {getCenter:()=>initialCenter,getZoom:()=>15,remove:()=>removed++,setView:(center,zoom)=>{
@@ -41,15 +45,14 @@ function testProviders() {
 }
 const input=document.createElement('canvas');input.width=3;input.height=1;
 const ctx=input.getContext('2d'), pixels=ctx.createImageData(3,1);
-pixels.data.set([82,0,0,255,210,0,0,255,0,0,0,0]);ctx.putImageData(pixels,0,0);
-const layer=wrRainbowTileLayer(input.toDataURL(),{maxNativeZoom:12,maxZoom:18});layer._tileZoom=0;
+pixels.data.set([193,0,0,255,193,0,0,255,0,0,0,0]);ctx.putImageData(pixels,0,0);
+const layer=wrBuildRadarLayer({time:1,url:input.toDataURL()});layer._tileZoom=0;
 layer.createTile({x:0,y:0,z:0},(error,tile)=>{
  try {
   if(error)throw error;
-  const actual=Array.from(tile.getContext('2d').getImageData(0,0,3,1).data);
-  if(JSON.stringify(actual)!==JSON.stringify([193,0,0,255,193,0,0,255,0,0,0,0]))throw Error(JSON.stringify(actual));
+  if(!(tile instanceof HTMLImageElement) || tile.crossOrigin!==null)throw Error('Rainbow must use native image tiles without Canvas/CORS');
   testProviders();
-  document.getElementById('result').textContent='PASS real Chromium + Leaflet canvas decoding and provider selection/reload/recovery';
+  document.getElementById('result').textContent='PASS real Chromium + Leaflet native Rainbow tiles and provider selection/reload/recovery';
  } catch(e){document.getElementById('result').textContent='FAIL '+e.message;}
 });
 </script></body></html>`;

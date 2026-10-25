@@ -48,7 +48,23 @@ for (const [dbz, rgba] of [[15, [136,221,238,255]], [35, [255,238,0,255]], [50, 
     const rate = Math.pow(Math.pow(10, dbz / 10) / 200, 1 / 1.6);
     assert.deepEqual(Array.from(context.wrMeteoswissColor(rate)), rgba, 'mm/h must use the same palette after Z-R conversion');
 }
-const raw = new Uint8ClampedArray([82, 0, 0, 255, 210, 0, 0, 255, 82, 0, 0, 0]);
-context.wrColorizeRainbowPixels(raw);
-assert.deepEqual(Array.from(raw), [193,0,0,255,193,0,0,255,0,0,0,0], 'rain/snow share intensity colors; no coverage is transparent');
-console.log('PASS official palette, physical conversion, raw dBZ and snow/no-coverage decoding');
+console.log('PASS official palette and physical conversion');
+
+const tileEvents = {};
+const tileLayer = {on(name, callback) { tileEvents[name] = callback; }};
+context.wrRadarLayer = tileLayer;
+context.wrTileDebugStats = {};
+context.wrRadarLoadedAtCache = {};
+context.wrUpdateTileDebug = () => {};
+context.wrFrameTime = () => '20:50:00';
+const statusMessages = [];
+context.wrSetText = (id, value) => statusMessages.push(value);
+vm.runInContext(extract('function wrAttachTileDebug(', 'function wrGetH5Module('), context);
+context.wrAttachTileDebug(tileLayer, {time:1}, 'tile', 'test');
+tileEvents.loading();tileEvents.tileerror();tileEvents.load();
+assert.equal(tileLayer.wrLoadError, true);
+assert.ok(statusMessages.at(-1).includes('nicht erreichbar'), 'Failed tile set must not appear as dry weather');
+tileEvents.loading();tileEvents.tileload();tileEvents.load();
+assert.equal(tileLayer.wrLoadError, false);
+assert.equal(statusMessages.at(-1), '20:50:00', 'Successful retry clears the error');
+console.log('PASS tile failure visibility and recovery');

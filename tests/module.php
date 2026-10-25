@@ -57,8 +57,6 @@ catch (Exception $e) { check(str_contains($e->getMessage(), 'Ungültiger Radar-P
 $method = new ReflectionMethod(Regenradar::class, 'BuildRainbowTileUrl');
 $url = $method->invoke($module, 'precip', 1791889800, 14400, 8, 'test key&');
 check($url === 'https://api.rainbow.ai/tiles/v1/precip/1791889800/14400/{z}/{x}/{y}?color=8&token=test%20key%26', 'Rainbow URL/credential encoding');
-$rawUrl = $method->invoke($module, 'precip', 1791889800, 14400, 'dbz_u8', 'test');
-check(str_contains($rawUrl, '?color=dbz_u8&token=test'), 'Rainbow raw palette request');
 $legendMethod = new ReflectionMethod(Regenradar::class, 'BuildRadarLegendPayload');
 $referenceEntries = null;
 foreach (['rainviewer', 'rainbow', 'meteoswiss'] as $provider) {
@@ -79,6 +77,7 @@ check(str_contains($html, 'Rainbow API-Key fehlt'), 'Missing-key visualization')
 preg_match_all('~<script\b[^>]*>(.*?)</script>~s', $html, $scripts);
 $output = $argv[2] ?? (sys_get_temp_dir() . '/regenradar-test.js');
 file_put_contents($output, implode("\n", $scripts[1]));
+file_put_contents($output . ".html", $html);
 echo "PASS lifecycle, configuration, provider validation, URL encoding and rendering (visualization=$type)\n";
 
 $module->properties['RadarProvider'] = 'rainviewer';
