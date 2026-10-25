@@ -182,7 +182,8 @@ class Regenradar extends IPSModuleStrict
                     'type' => 'ExpansionPanel',
                     'caption' => 'Darstellung',
                     'items' => [
-                        ['type' => 'NumberSpinner', 'name' => 'Zoom', 'caption' => 'Start-Zoom', 'minimum' => 1, 'maximum' => 12],
+                        ['type' => 'Label', 'caption' => 'Zoom bis 18 vergrößert die Karte. Radarauflösung: RainViewer bis Zoom 7, Rainbow bis Zoom 12, MeteoSwiss 1 km.'],
+                        ['type' => 'NumberSpinner', 'name' => 'Zoom', 'caption' => 'Start-Zoom', 'minimum' => 1, 'maximum' => 18],
                         [
                             'type' => 'Select',
                             'name' => 'Theme',
@@ -949,18 +950,59 @@ function wrLv95FromWgs84(lat, lon) {
     return [east, north];
 }
 
+// Gemeinsame offizielle Universal-Blue-Tabelle. dBZ -> mm/h ist nur eine Z-R-Näherung.
+function wrRadarColor(dbz) {
+    const palette = wrConfig && wrConfig.radarPalette;
+    if (!palette || !Number.isFinite(dbz)) return [0, 0, 0, 0];
+    const index = Math.max(0, Math.min(palette.colors.length - 1, Math.round(dbz) - palette.dbzMin));
+    const hex = palette.colors[index].slice(1);
+    return [0, 2, 4, 6].map(offset => parseInt(hex.slice(offset, offset + 2), 16));
+}
+
 function wrMeteoswissColor(value) {
-    // Kräftige, hoch gesättigte Blau–Gelb–Rot–Violett-Palette für die
-    // selbst gerenderten MeteoSwiss-HDF5-Daten. Die Intensitätsgrenzen
-    // bleiben unverändert; nur Kontrast, Sättigung und Deckkraft sind erhöht.
-    if (!Number.isFinite(value) || value < 0.1) return [0, 0, 0, 0];
-    if (value < 0.5)  return [0, 210, 255, 255];  // kräftiges cyan
-    if (value < 2.5)  return [0, 160, 210, 255];  // kräftiges türkis
-    if (value < 10.0) return [0, 90, 170, 255];   // sattes dunkelblau
-    if (value < 25.0) return [255, 220, 0, 255];  // kräftiges gelb
-    if (value < 50.0) return [255, 130, 0, 255];  // kräftiges orange
-    if (value < 75.0) return [235, 30, 40, 255];  // kräftiges rot
-    return [190, 0, 170, 255];                    // kräftiges magenta / violett
+    if (!Number.isFinite(value) || value <= 0) return [0, 0, 0, 0];
+    const palette = wrConfig && wrConfig.radarPalette;
+    if (!palette) return [0, 0, 0, 0];
+    return wrRadarColor(10 * Math.log10(palette.zrA * Math.pow(value, palette.zrB)));
+}
+
+function wrColorizeRainbowPixels(pixels) {
+    for (let offset = 0; offset < pixels.length; offset += 4) {
+        const coverage = pixels[offset + 3] / 255;
+        const color = coverage ? wrRadarColor((pixels[offset] & 127) - 32) : [0, 0, 0, 0];
+        pixels[offset] = color[0];
+        pixels[offset + 1] = color[1];
+        pixels[offset + 2] = color[2];
+        pixels[offset + 3] = Math.round(color[3] * coverage);
+    }
+}
+
+// Rohdaten nicht vom Browser skalieren lassen, bevor die dBZ-Werte dekodiert sind.
+function wrRainbowTileLayer(url, options) {
+    const RadarLayer = L.TileLayer.extend({
+        createTile: function(coords, done) {
+            const canvas = document.createElement('canvas');
+            canvas.width = canvas.height = 256;
+            const image = new Image();
+            image.crossOrigin = 'anonymous';
+            image.onload = function() {
+                try {
+                    canvas.width = image.naturalWidth;
+                    canvas.height = image.naturalHeight;
+                    const context = canvas.getContext('2d');
+                    context.drawImage(image, 0, 0);
+                    const data = context.getImageData(0, 0, canvas.width, canvas.height);
+                    wrColorizeRainbowPixels(data.data);
+                    context.putImageData(data, 0, 0);
+                    done(null, canvas);
+                } catch (error) { done(error, canvas); }
+            };
+            image.onerror = function() { done(new Error('Rainbow-Radartile nicht erreichbar'), canvas); };
+            image.src = this.getTileUrl(coords);
+            return canvas;
+        }
+    });
+    return new RadarLayer(url, options);
 }
 
 // Leaflet imageOverlay streckt das Bild in Web Mercator, nicht linear im Breitengrad.
@@ -1059,14 +1101,14 @@ function wrBuildRadarLayer(frame) {
         const tileSize = window.devicePixelRatio >= 2 ? 512 : 256;
         layer = L.tileLayer(
             host + frame.path + '/' + tileSize + '/{z}/{x}/{y}/2/1_1.png',
-            { tileSize: 256, opacity: 0, maxNativeZoom: 7, maxZoom: 7 }
+            { tileSize: 256, opacity: 0, maxNativeZoom: 7, maxZoom: 18 }
         );
     }
 
     if (wrRadarPayload.provider === 'rainbow') {
-        layer = L.tileLayer(
+        layer = wrRainbowTileLayer(
             frame.url,
-            { tileSize: 256, opacity: 0, maxNativeZoom: 12, maxZoom: 12 }
+            { tileSize: 256, opacity: 0, maxNativeZoom: 12, maxZoom: 18 }
         );
     }
 
@@ -1324,7 +1366,14 @@ function wrRenderLegend(legend) {
             providerSelect.disabled = true;
             wrStopAnimation();
             wrStopRadarRefreshTimer();
-            requestAction('SetRadarProvider', selectedProvider);
+            try {
+                requestAction('SetRadarProvider', selectedProvider);
+            } catch (error) {
+                providerSelect.disabled = false;
+                providerSelect.value = currentProvider;
+                wrSetText('wr-frame-time', 'Providerwechsel fehlgeschlagen: ' + error.message);
+                wrStartRadarRefreshTimer();
+            }
         });
         box.appendChild(providerSelect);
     }
@@ -1367,6 +1416,12 @@ function wrRenderLegend(legend) {
             box.appendChild(row);
         });
     }
+    if (legend.note) {
+        const note = document.createElement('div');
+        note.className = 'wr-legend-note';
+        note.textContent = legend.note;
+        box.appendChild(note);
+    }
 }
 
 function wrRenderWeather(payload) {
@@ -1387,9 +1442,7 @@ function wrInitMap(config) {
     wrSetTileDebugVisible();
 
     const root = document.getElementById('wetterradar-root');
-    if (root && config.theme === 'light') {
-        root.classList.add('wr-light');
-    }
+    if (root) root.classList.toggle('wr-light', config.theme === 'light');
 
     wrMap = L.map('map', {
         zoomControl: true,
@@ -1400,6 +1453,7 @@ function wrInitMap(config) {
 
     const options = {
         maxZoom: config.radarMaxZoom || 7,
+        maxNativeZoom: 17,
         attribution: config.mapAttribution || ''
     };
 
@@ -1479,6 +1533,7 @@ function wrRenderRadar(payload) {
 
 function wrHandlePayload(payload) {
     if (!payload || !payload.type) return;
+    const previousConfig = wrConfig;
     wrData = payload;
     if (payload.data && payload.data.config) {
         wrConfig = payload.data.config;
@@ -1487,17 +1542,24 @@ function wrHandlePayload(payload) {
     }
 
     if (payload.type === 'reload') {
-        try {
-            window.location.reload();
-            return;
-        } catch (e) {
-            if (payload.data) {
-                wrInitMap(payload.data.config);
-                wrRenderWeather(payload.data.weather);
-                wrRenderRadar(payload.data.radar);
-            }
-            return;
-        }
+        if (!payload.data) return;
+        // Providerwechsel direkt in der Kachel: kein Reload des Symcon-Iframes.
+        const preserveView = wrMap && previousConfig &&
+            previousConfig.radarProvider !== wrConfig.radarProvider;
+        const center = preserveView ? wrMap.getCenter() : null;
+        const zoom = preserveView ? wrMap.getZoom() : null;
+        wrStopAnimation();
+        wrStopRadarRefreshTimer();
+        wrClearRadarLayers();
+        if (wrMap) wrMap.remove();
+        wrMap = null;
+        wrBaseLayer = null;
+        wrInitMap(wrConfig);
+        if (center) wrMap.setView(center, Math.min(zoom, wrConfig.radarMaxZoom));
+        wrRenderWeather(payload.data.weather);
+        wrRenderRadar(payload.data.radar);
+        wrStartRadarRefreshTimer();
+        return;
     }
 
     if (payload.type === 'init') {
@@ -1755,7 +1817,7 @@ HTML;
     {
         [$lat, $lon] = $this->GetLocation();
         $provider = $this->ReadPropertyString('RadarProvider');
-        $radarMaxZoom = ($provider === 'rainbow' || $provider === 'meteoswiss') ? 12 : 7;
+        $radarMaxZoom = 18; // Höherer Kartenzoom vergrößert vorhandene Radardaten (Overzoom).
         $zoom = min(max(1, $this->ReadPropertyInteger('Zoom')), $radarMaxZoom);
         [$mapTileUrl, $mapAttribution, $subdomains] = $this->GetMapStyle();
 
@@ -1770,6 +1832,7 @@ HTML;
             'enableAutoplay' => $this->ReadPropertyBoolean('EnableAutoplay'),
             'showTileDebug' => $this->ReadPropertyBoolean('ShowTileDebug'),
             'legend' => $this->BuildRadarLegendPayload(),
+            'radarPalette' => $this->GetRadarPalette(),
             'mapTileUrl' => $mapTileUrl,
             'mapAttribution' => $mapAttribution,
             'mapSubdomains' => $subdomains
@@ -1855,36 +1918,28 @@ HTML;
             default => 'RainViewer',
         };
 
-        // RainViewer und Rainbow behalten ihre bisherige Tile-Legende.
-        // MeteoSwiss wird im Browser selbst gerendert und erhält deshalb die
-        // kräftigeren Farben aus wrMeteoswissColor(), damit Legende und Bild
-        // weiterhin exakt übereinstimmen.
-        $entries = $provider === 'meteoswiss'
-            ? [
-                ['color' => '#00d2ff', 'label' => '0,1–0,5 mm/h'],
-                ['color' => '#00a0d2', 'label' => '0,5–2,5 mm/h'],
-                ['color' => '#005aaa', 'label' => '2,5–10 mm/h'],
-                ['color' => '#ffdc00', 'label' => '10–25 mm/h'],
-                ['color' => '#ff8200', 'label' => '25–50 mm/h'],
-                ['color' => '#eb1e28', 'label' => '50–75 mm/h'],
-                ['color' => '#be00aa', 'label' => '≥ 75 mm/h'],
-            ]
-            : [
-                ['color' => '#8ee6f2', 'label' => '0,1–0,5 mm/h'],
-                ['color' => '#45bfd3', 'label' => '0,5–2,5 mm/h'],
-                ['color' => '#287f9e', 'label' => '2,5–10 mm/h'],
-                ['color' => '#ffe43b', 'label' => '10–25 mm/h'],
-                ['color' => '#f59a45', 'label' => '25–50 mm/h'],
-                ['color' => '#d95858', 'label' => '50–75 mm/h'],
-                ['color' => '#a84f72', 'label' => '≥ 75 mm/h'],
+        $palette = $this->GetRadarPalette();
+        $entries = [];
+        foreach ([15, 20, 25, 30, 35, 40, 45, 50, 55, 60] as $dbz) {
+            $rate = pow(pow(10, $dbz / 10) / $palette['zrA'], 1 / $palette['zrB']);
+            $entries[] = [
+                'color' => $palette['colors'][$dbz - $palette['dbzMin']],
+                'label' => '≈ ' . number_format($rate, 1, ',', '') . ' mm/h (' . $dbz . ' dBZ)'
             ];
+        }
 
         return [
             'type' => 'entries',
             'provider' => $providerName,
-            'title' => 'Niederschlag (mm/h)',
-            'entries' => $entries
+            'title' => 'Intensität · Universal Blue',
+            'entries' => $entries,
+            'note' => 'Kontinuierliche Farbskala; mm/h aus dBZ geschätzt (Z = 200 R^1,6). Regen und Schnee verwenden dieselbe Intensitätsskala.'
         ];
+    }
+
+    private function GetRadarPalette(): array
+    {
+        return json_decode(file_get_contents(__DIR__ . '/radar-palette.json'), true, 512, JSON_THROW_ON_ERROR);
     }
 
     private function BuildWeatherPayload(): array
@@ -2111,7 +2166,7 @@ HTML;
     {
         $apiKey = trim($this->ReadPropertyString('RainbowApiKey'));
         $layer = 'precip';
-        $color = 8; // RainViewer Universal Blue / Original
+        $color = 'dbz_u8'; // Rohdaten: gemeinsame Palette im Browser, auch für Schneepixel.
 
         if ($apiKey === '') {
             $this->SendDebug(
@@ -2145,7 +2200,7 @@ HTML;
             ];
         }
 
-        $pastSteps = [-3600, -3000, -2400, -1800, -1200, -600];
+        $pastSteps = range(-7200, -600, 600);
         // Rainbow unterstützt Zukunftsframes in 10-Minuten-Schritten bis maximal 4 Stunden.
         $forecastHours = max(1, min(4, $this->ReadPropertyInteger('RainbowForecastHours')));
         $forecastSteps = range(0, $forecastHours * 3600, 600);
@@ -2181,7 +2236,7 @@ HTML;
         ];
     }
 
-    private function BuildRainbowTileUrl(string $layer, int $snapshot, int $forecastTime, int $color, string $apiKey): string
+    private function BuildRainbowTileUrl(string $layer, int $snapshot, int $forecastTime, int|string $color, string $apiKey): string
     {
         return 'https://api.rainbow.ai/tiles/v1/' . rawurlencode($layer) . '/' . $snapshot . '/' . $forecastTime . '/{z}/{x}/{y}?color=' . $color . '&token=' . rawurlencode($apiKey);
     }

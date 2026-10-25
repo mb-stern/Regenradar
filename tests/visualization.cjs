@@ -1,6 +1,7 @@
 const {readFileSync} = require('node:fs');
 const vm = require('node:vm');
 const assert = require('node:assert/strict');
+const palette = JSON.parse(readFileSync(__dirname + '/../RGR/radar-palette.json', 'utf8'));
 const source = readFileSync(process.argv[2] || '/tmp/regenradar-test.js', 'utf8');
 function extract(start, end) { return source.slice(source.indexOf(start), source.indexOf(end, source.indexOf(start))); }
 const calls = [];
@@ -11,14 +12,14 @@ const context = vm.createContext({
         addAttribution(value) { calls.push(['add', value]); },
         removeAttribution(value) { calls.push(['remove', value]); }
     }},
-    wrAnimationTimer: null, wrConfig: {enableAutoplay: true},
+    wrAnimationTimer: null, wrConfig: {enableAutoplay: true, radarPalette: palette},
     wrStopAnimation() {}, wrPruneRadarLayerCache() {}, wrSetText() {},
     wrRadarCacheKey(f) { return String(f.time); }, wrShowFrame() {},
     wrPlayAnimation() { calls.push(['play']); }
 });
 vm.runInContext(extract('function wrMeteoswissLatitude(', 'async function wrBuildMeteoswissImage('), context);
 vm.runInContext(extract('function wrLv95FromWgs84(', 'function wrMeteoswissColor('), context);
-vm.runInContext(extract('function wrMeteoswissColor(', '// Leaflet imageOverlay'), context);
+vm.runInContext(extract('function wrRadarColor(', '// Leaflet imageOverlay'), context);
 vm.runInContext(extract('function wrRenderRadar(', 'function wrHandlePayload('), context);
 const lat = context.wrMeteoswissLatitude(0, 1, 43.619, 49.3744);
 const mercator = d => Math.log(Math.tan(Math.PI / 4 + d * Math.PI / 360));
@@ -39,3 +40,15 @@ assert.ok(calls.some(([op, value]) => op === 'remove' && value.includes('rainvie
 context.wrRenderRadar({provider: 'meteoswiss', frames: []});
 assert.equal(context.wrFrames.length, 0);
 console.log('PASS Mercator sampling, Swiss projection, nodata colors, attribution, frame selection and visibility');
+
+// Official Universal Blue sample points, not the former invented intensity bins.
+assert.equal(palette.colors.length, 128);
+for (const [dbz, rgba] of [[15, [136,221,238,255]], [35, [255,238,0,255]], [50, [193,0,0,255]], [60, [255,119,255,255]]]) {
+    assert.deepEqual(Array.from(context.wrRadarColor(dbz)), rgba);
+    const rate = Math.pow(Math.pow(10, dbz / 10) / 200, 1 / 1.6);
+    assert.deepEqual(Array.from(context.wrMeteoswissColor(rate)), rgba, 'mm/h must use the same palette after Z-R conversion');
+}
+const raw = new Uint8ClampedArray([82, 0, 0, 255, 210, 0, 0, 255, 82, 0, 0, 0]);
+context.wrColorizeRainbowPixels(raw);
+assert.deepEqual(Array.from(raw), [193,0,0,255,193,0,0,255,0,0,0,0], 'rain/snow share intensity colors; no coverage is transparent');
+console.log('PASS official palette, physical conversion, raw dBZ and snow/no-coverage decoding');

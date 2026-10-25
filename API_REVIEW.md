@@ -29,9 +29,9 @@ Seit Januar 2026 gibt es im öffentlichen Angebot keine Nowcast- oder Satelliten
 
 [Dokumentation](https://doc.rainbow.ai/), [OpenAPI](https://doc.rainbow.ai/api-ref/api.fixed.json), [historische Frames](https://doc.rainbow.ai/faq/tiles/).
 
-Die vollständige OpenAPI bestätigt ausdrücklich die vorhandenen `/tiles/v1/snapshot`- und `/tiles/v1/precip/{snapshot}/{forecast_time}/{zoom}/{tile_x}/{tile_y}`-Pfade. Der alternative Pfad im Einstiegsbeispiel ist kein Grund, die funktionierenden Tile-Pfade zu ersetzen. Der verwendete Header `Ocp-Apim-Subscription-Key` und der Tile-Queryparameter `token` sind dokumentiert. Palette 8 ist RainViewer Universal Blue.
+Die vollständige OpenAPI bestätigt ausdrücklich die vorhandenen `/tiles/v1/snapshot`- und `/tiles/v1/precip/{snapshot}/{forecast_time}/{zoom}/{tile_x}/{tile_y}`-Pfade. Der alternative Pfad im Einstiegsbeispiel ist kein Grund, die funktionierenden Tile-Pfade zu ersetzen. Der verwendete Header `Ocp-Apim-Subscription-Key` und der Tile-Queryparameter `token` sind dokumentiert. Für die einheitliche Darstellung wird jetzt `dbz_u8` dekodiert und mit der offiziellen Universal-Blue-Tabelle eingefärbt (Details unten).
 
-Die vorhandenen Prognosen bis 14400 Sekunden in 600-Sekunden-Schritten und Zoom 12 liegen im dokumentierten Bereich. Die verwendete Stunde Historie liegt innerhalb der erlaubten zwei Stunden. Der Dienst antwortet ohne Schlüssel mit HTTP 401; authentifizierte Snapshot-/Tile-Inhalte wurden mangels konfiguriertem Schlüssel nicht geprüft.
+Die Prognosen bis 14400 Sekunden in 600-Sekunden-Schritten und nativer Radarzoom 12 liegen im dokumentierten Bereich. Die Historie verwendet jetzt die erlaubten zwei Stunden. Der Dienst antwortet ohne Schlüssel mit HTTP 401; authentifizierte Snapshot-/Tile-Inhalte wurden mangels konfiguriertem Schlüssel nicht geprüft.
 
 ### MeteoSchweiz / STAC
 
@@ -69,3 +69,39 @@ In der vorbereiteten Cloud-Umgebung zuerst `export PATH="/workspace/.regenradar-
 Die Regressionstests prüfen beide Symcon-Konstantenvarianten, wiederholtes ApplyChanges, Konfigurations-/Fehlerpayloads, ungültige Provider, URL-Encoding, Mercator-Abtastung, eine Schweizer Projektionsreferenz, NoData-Farben, Attribution, Frameauswahl und Sichtbarkeit. Die Tests verwenden minimale Symcon-/Browser-Doubles und sind kein echter Integrationstest.
 
 Zusätzlich wurden die tatsächlichen PHP-Payload-Builder für RainViewer und MeteoSchweiz gegen die Live-APIs ausgeführt. Es gibt hier keine laufende IP-Symcon-Instanz und keinen Rainbow-Schlüssel. Darstellung, Vollbildwechsel, Aktionen und Browser-Tiles in einer echten Symcon-Installation bleiben deshalb als Integrationstest offen.
+
+
+## Ergänzung: einheitliche Farbskala und vollständige Reichweite
+
+Die frühere ungeprüfte, grobe mm/h-Legende und die abweichende MeteoSchweiz-Palette wurden ersetzt. Maßgeblich ist jetzt `RGR/radar-palette.json`: die 128 Regen-Farbwerte der offiziellen [Universal-Blue-Tabelle](https://www.rainviewer.com/files/rainviewer_api_colors_table.csv) für −32 bis 95 dBZ. Die zweite Hälfte der CSV ist die Schneepalette und wird absichtlich nicht als zusätzliche Regen-Farbstufen eingelesen.
+
+- RainViewer verwendet weiterhin Schema 2, nun ohne Glättung und ohne separate Schneefarben (`0_0`). Damit bleibt dieselbe Intensitätsfarbe für Regen und Schnee erhalten.
+- Rainbow nutzt statt Palette 8 jetzt dokumentierte [Rohdaten](https://doc.rainbow.ai/tile_colors/#raw-dbz-values) (`color=dbz_u8`). Der Browser dekodiert `(R & 127) - 32`, behandelt Regen/Schnee mit derselben Palette und macht fehlende Abdeckung transparent. Vor der Dekodierung wird das Quellbild nicht skaliert. Es gibt keine zusätzlichen API-Abfragen für die Umfärbung.
+- MeteoSchweiz-mm/h werden mit der expliziten Näherung `Z = 200 R^1,6` in dBZ umgerechnet und derselben Tabelle zugeordnet. Null/NaN bleiben transparent. Das ist eine Darstellungsvereinheitlichung; unterschiedliche Messverfahren und providerseitige Kalibrierungen werden dadurch nicht identisch.
+- Legende und Renderer beziehen ihre Farben aus derselben Datei. Die Legende nennt dBZ-Referenzpunkte und nur **ungefähre** mm/h-Werte. Gleiche Farbtöne bedeuten damit dieselbe Skalenstufe, aber keine garantierte Gleichheit der Messungen. Die alte Aussage zu Palette 8 beschreibt den vorherigen Stand und ist durch diese Ergänzung ersetzt.
+
+| Anbieter | Historie im Modul | Vorschau | Native Radardetails | Kartenzoom |
+|---|---|---|---|---|
+| RainViewer | alle gelieferten Frames, ca. 2 h | keine, seit 2026 eingestellt | bis Zoom 7 | jetzt bis 18, darüber Vergrößerung |
+| Rainbow | jetzt volle 2 h statt 1 h | 1–4 h einstellbar; Standard 1 h, API-Maximum 4 h | bis Zoom 12 | jetzt bis 18, darüber Vergrößerung |
+| MeteoSchweiz RZC | weiterhin letzte 12 Bilder, ca. 55 min | keine Zukunftsbilder in diesem RZC-Produkt | 1-km-Raster, keine XYZ-Zoomstufen | jetzt bis 18, ohne höhere Radarauflösung |
+
+Mehr Kartenzoom ist bewusst von Radardetails getrennt; das Modul fordert keine nicht unterstützten Zoomstufen bei den Radar-Anbietern an. Basiskarten werden oberhalb Zoom 17 ebenfalls vergrößert. Die visuelle Größe einer Kachel ist keine zusätzliche Messgenauigkeit.
+
+Nicht ausgeschöpft sind längere MeteoSchweiz-Archive (die Tagesitems enthalten deutlich mehr als zwölf RZC-Dateien), Rainbow-Coverage-/Wolken-/globale Layer und punktbezogene Prognosen sowie RainViewer-Coverage. Diese sind keine weiteren verfügbaren RZC-Vorschauframes und würden eigene Bedienelemente bzw. eine Speicher-/Ladebegrenzung benötigen. Mehr Bilder erhöhen Ladezeit, Browser-Speicher und ggf. Rainbow-Tile-Verbrauch; vier Stunden Vorschau sind daher wählbar, nicht ungefragt als Standard aktiviert.
+
+Zusätzliche Tests prüfen offizielle Farbreferenzpunkte, die physikalische Näherung, identische Providerlegenden, NoData/Schnee-Dekodierung und Zoom 18. Ein echter Chromium-/Leaflet-Test hat die Canvas-Dekodierung mit synthetischen Rohdaten einschließlich transparenter Pixel erfolgreich geprüft:
+
+```sh
+# Chromium muss lokal mit einem CDP-Port laufen; Leaflet liegt als lokale Datei vor.
+node tests/browser.cjs /tmp/regenradar-test.js /tmp/leaflet.js
+```
+
+Ein authentifizierter Rainbow-Rohdaten-/CORS-Livetest ist weiterhin mangels Schlüssel offen; der Browsertest ersetzt ihn nicht. Ebenso bleibt die Bedienprüfung in einer echten IP-Symcon-Instanz offen.
+
+
+## Providerwechsel direkt in der Kachel
+
+Das Auswahlfeld oberhalb der Farbskala bietet RainViewer, Rainbow und MeteoSchweiz an. Der vorhandene Symcon-Aufruf `SetRadarProvider` speichert die Auswahl in der Instanz und löst `ApplyChanges()` aus. Der neue Payload aktualisiert die Kachel jetzt direkt, statt das Symcon-Iframe über `window.location.reload()` neu zu laden. Karte, Legende, Radarframes und Timer werden erneuert; beim Providerwechsel bleiben Kartenausschnitt und Zoom erhalten. Beim Themewechsel wird die Hell-/Dunkelklasse korrekt umgeschaltet. Ein unmittelbar fehlgeschlagener RequestAction-Aufruf gibt das Auswahlfeld wieder frei und zeigt einen Fehler.
+
+Der PHP-Test prüft die Aktion einschließlich aktualisiertem Konfigurationspayload. Der Chromium-Test betätigt das echte HTML-Auswahlfeld für alle drei Provider und prüft Aktionsparameter, erneutes Freigeben, Kartenposition, Aktualisierung und synchrone Fehlerbehandlung. Der Host-Payload wird dabei simuliert; ein Live-Wechsel in IP-Symcon ist weiterhin offen. Rainbow kann ausgewählt werden, benötigt für Daten aber einen hinterlegten API-Schlüssel. Die Auswahl gilt wie bisher für die gesamte Symcon-Instanz, nicht nur für einen einzelnen Browser.

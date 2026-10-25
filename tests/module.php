@@ -2,6 +2,7 @@
 // Run with PHP CLI; these host doubles do not replace an IP-Symcon integration test.
 class IPSModuleStrict
 {
+    public int $InstanceID = 12345;
     public array $properties = [];
     public array $attributes = [];
     public array $calls = [];
@@ -22,6 +23,16 @@ class IPSModuleStrict
     protected function SendDebug(...$args) {}
 }
 function IPS_GetInstanceListByModuleID($id) { return []; }
+function IPS_SetProperty($id, $name, $value) {
+    global $module;
+    check($id === $module->InstanceID, 'Wrong target instance');
+    $module->properties[$name] = $value;
+}
+function IPS_ApplyChanges($id) {
+    global $module;
+    check($id === $module->InstanceID, 'Wrong target instance');
+    $module->ApplyChanges();
+}
 function check(bool $condition, string $message): void {
     if (!$condition) throw new RuntimeException($message);
 }
@@ -46,9 +57,32 @@ catch (Exception $e) { check(str_contains($e->getMessage(), 'Ungültiger Radar-P
 $method = new ReflectionMethod(Regenradar::class, 'BuildRainbowTileUrl');
 $url = $method->invoke($module, 'precip', 1791889800, 14400, 8, 'test key&');
 check($url === 'https://api.rainbow.ai/tiles/v1/precip/1791889800/14400/{z}/{x}/{y}?color=8&token=test%20key%26', 'Rainbow URL/credential encoding');
+$rawUrl = $method->invoke($module, 'precip', 1791889800, 14400, 'dbz_u8', 'test');
+check(str_contains($rawUrl, '?color=dbz_u8&token=test'), 'Rainbow raw palette request');
+$legendMethod = new ReflectionMethod(Regenradar::class, 'BuildRadarLegendPayload');
+$referenceEntries = null;
+foreach (['rainviewer', 'rainbow', 'meteoswiss'] as $provider) {
+    $module->properties['RadarProvider'] = $provider;
+    $legend = $legendMethod->invoke($module);
+    if ($referenceEntries === null) $referenceEntries = $legend['entries'];
+    check($legend['entries'] === $referenceEntries, 'Provider legends must be identical');
+    check(str_contains($legend['note'], 'geschätzt'), 'Estimated mm/h must be labeled');
+    $configMethod = new ReflectionMethod(Regenradar::class, 'BuildClientConfig');
+    $module->properties['Zoom'] = 18;
+    $config = $configMethod->invoke($module);
+    check($config['zoom'] === 18 && $config['radarMaxZoom'] === 18, 'Overzoom to 18');
+}
+$module->properties['RadarProvider'] = 'rainbow';
 $html = $module->GetVisualizationTile();
 check(str_contains($html, 'Rainbow API-Key fehlt'), 'Missing-key visualization');
 preg_match_all('~<script\b[^>]*>(.*?)</script>~s', $html, $scripts);
 $output = $argv[2] ?? (sys_get_temp_dir() . '/regenradar-test.js');
 file_put_contents($output, implode("\n", $scripts[1]));
 echo "PASS lifecycle, configuration, provider validation, URL encoding and rendering (visualization=$type)\n";
+
+$module->properties['RadarProvider'] = 'rainviewer';
+$module->RequestAction('SetRadarProvider', ' RAINBOW ');
+check($module->properties['RadarProvider'] === 'rainbow', 'Provider action must update configuration');
+$last = end($module->messages);
+check($last['type'] === 'reload' && $last['data']['config']['radarProvider'] === 'rainbow', 'Provider switch must send the new configuration');
+echo "PASS provider switch action and updated visualization payload\n";
