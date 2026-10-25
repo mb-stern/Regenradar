@@ -6,7 +6,8 @@ const {readFileSync} = require('node:fs');
     const functions = source.slice(source.indexOf('function wrRadarColor('), source.indexOf('// Leaflet imageOverlay'));
     const tileFunctions = source.slice(source.indexOf('function wrBuildRadarLayer('), source.indexOf('function wrRadarCacheKey('));
     const legendFunctions = source.slice(source.indexOf('function wrEscapeHtml('), source.indexOf('function wrRenderWeather('));
-    const payloadFunction = source.slice(source.indexOf('function wrHandlePayload('), source.indexOf('function handleMessage('));
+    const payloadFunction = source.slice(source.indexOf('function wrHandlePayload('), source.indexOf('function handleMessage('))
+        .replace('window.location.reload();', 'testReloadCount++;'); // Observe a navigation request without destroying the test page.
     const palette = readFileSync(__dirname + '/../RGR/radar-palette.json', 'utf8');
     const leaflet = readFileSync(process.argv[3] || '/tmp/leaflet.js', 'utf8');
     const html = `<html><body><pre id="result">PENDING</pre><div id="wr-legend"></div><span id="wr-frame-time"></span><script>${leaflet}</script><script>
@@ -17,6 +18,7 @@ ${legendFunctions}
 ${payloadFunction}
 const wrRadarPayload={provider:'rainbow'};
 function wrRadarCacheKey(){return 'test';} function wrAttachTileDebug(layer){return layer;}
+let testReloadCount=0;
 let wrData, wrBaseLayer, removed=0, refreshes=0, actions=[], failAction=false;
 const initialCenter={lat:47.3,lng:8.5};
 function makeMap() {return {getCenter:()=>initialCenter,getZoom:()=>15,remove:()=>removed++,setView:(center,zoom)=>{
@@ -39,7 +41,7 @@ function testProviders() {
   const updated=document.querySelector('.wr-provider-select');
   if(updated.value!==provider || updated.disabled)throw Error('Selection not restored');
  }
- if(removed!==3 || refreshes!==3)throw Error('Reload lifecycle incomplete');
+ if(testReloadCount!==3)throw Error('Expected the original HTML reload request');
  failAction=true;const select=document.querySelector('.wr-provider-select');select.value='rainbow';select.dispatchEvent(new Event('change'));
  if(select.disabled || select.value!=='rainviewer' || !document.getElementById('wr-frame-time').textContent.includes('fehlgeschlagen'))throw Error('Switch recovery failed');
 }

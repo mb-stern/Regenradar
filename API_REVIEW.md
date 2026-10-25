@@ -143,3 +143,10 @@ Der native PHP-HTTP-Transport wurde gegen einen lokalen HTTP-Testserver mit 200/
 ## Rücknahme der letzten dynamischen Layoutänderung
 
 Auf Nutzerwunsch wurden CSS, Anordnung, Legende, Vorhersage und Größenpositionierung auf den Stand vor der letzten Layoutüberarbeitung (`44b3c6a`) zurückgesetzt. Die neu eingeführten aufklappbaren Bereiche und der dazugehörige Layouttest wurden entfernt. Die ursprüngliche Größenanpassung bleibt bestehen. Die regulären Rainbow-PNGs, Wiederholung fehlgeschlagener Layer, Fehlermeldungen, API-Diagnose, HTML-SDK-Vollbildunterstützung und Providerwechsel bleiben erhalten.
+
+
+## Vollständiger Rückgang der Dynamik auf den Chat-Ausgangsstand
+
+Auf erneuten Nutzerwunsch wurden CSS, HTML-Anordnung, initiale Skalierung, Legenden-/Vorhersageaufbau, Größenpositionierung und der HTML-Reload-Handler direkt gegen den ursprünglichen Commit `7128469` abgeglichen und exakt daraus wiederhergestellt. Es gibt keine kompakte Grid-Ansicht und keine „Skala“-/„Vorhersage“-Aufklappschalter mehr. Die später hinzugefügte Aktualisierung ohne Seitenreload wurde ebenfalls entfernt: Ein Reload fordert jetzt wieder ein Neuladen des eingebetteten Dokuments an. Die vorigen Hinweise auf Erhalt des Kartenausschnitts bei Providerwechsel beschreiben damit nicht mehr den aktuellen Stand. Rainbow-PNGs, Cache-Wiederholung, Diagnose und sonstige API-Korrekturen sind unverändert erhalten.
+
+Ein noch angezeigter „Skala“-Knopf kennzeichnet die zwischenzeitliche HTML-Version und kommt im aktuellen Quelltext nicht vor. Nach dem Modulupdate die gesamte Visualisierung im Browser vollständig neu laden; eine bereits laufende alte Kachel kann ihren bisherigen JavaScript-Code weiter ausführen. Die Rücknahme wurde per direktem Vergleich aller genannten Abschnitte mit `7128469` sowie den PHP-/JavaScript-Regressionstests geprüft.

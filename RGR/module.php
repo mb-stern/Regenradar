@@ -1342,14 +1342,7 @@ function wrRenderLegend(legend) {
             providerSelect.disabled = true;
             wrStopAnimation();
             wrStopRadarRefreshTimer();
-            try {
-                requestAction('SetRadarProvider', selectedProvider);
-            } catch (error) {
-                providerSelect.disabled = false;
-                providerSelect.value = currentProvider;
-                wrSetText('wr-frame-time', 'Providerwechsel fehlgeschlagen: ' + error.message);
-                wrStartRadarRefreshTimer();
-            }
+            requestAction('SetRadarProvider', selectedProvider);
         });
         box.appendChild(providerSelect);
     }
@@ -1391,12 +1384,6 @@ function wrRenderLegend(legend) {
                 wrEscapeHtml(entry.label || '');
             box.appendChild(row);
         });
-    }
-    if (legend.note) {
-        const note = document.createElement('div');
-        note.className = 'wr-legend-note';
-        note.textContent = legend.note;
-        box.appendChild(note);
     }
 }
 
@@ -1509,7 +1496,6 @@ function wrRenderRadar(payload) {
 
 function wrHandlePayload(payload) {
     if (!payload || !payload.type) return;
-    const previousConfig = wrConfig;
     wrData = payload;
     if (payload.data && payload.data.config) {
         wrConfig = payload.data.config;
@@ -1518,24 +1504,17 @@ function wrHandlePayload(payload) {
     }
 
     if (payload.type === 'reload') {
-        if (!payload.data) return;
-        // Providerwechsel direkt in der Kachel: kein Reload des Symcon-Iframes.
-        const preserveView = wrMap && previousConfig &&
-            previousConfig.radarProvider !== wrConfig.radarProvider;
-        const center = preserveView ? wrMap.getCenter() : null;
-        const zoom = preserveView ? wrMap.getZoom() : null;
-        wrStopAnimation();
-        wrStopRadarRefreshTimer();
-        wrClearRadarLayers();
-        if (wrMap) wrMap.remove();
-        wrMap = null;
-        wrBaseLayer = null;
-        wrInitMap(wrConfig);
-        if (center) wrMap.setView(center, Math.min(zoom, wrConfig.radarMaxZoom));
-        wrRenderWeather(payload.data.weather);
-        wrRenderRadar(payload.data.radar);
-        wrStartRadarRefreshTimer();
-        return;
+        try {
+            window.location.reload();
+            return;
+        } catch (e) {
+            if (payload.data) {
+                wrInitMap(payload.data.config);
+                wrRenderWeather(payload.data.weather);
+                wrRenderRadar(payload.data.radar);
+            }
+            return;
+        }
     }
 
     if (payload.type === 'init') {

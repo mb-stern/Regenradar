@@ -85,3 +85,12 @@ assert.equal(context.wrRadarLayer, null);
 assert.equal(removedLayers.length, 1);
 assert.equal(context.wrRadarLoadedAtCache.failed, undefined);
 console.log('PASS retry unchanged frames after tile failure without discarding healthy cache');
+
+let reloadRequests = 0;
+context.window = {location:{reload(){reloadRequests++;}}};
+context.wrRenderLegend = () => {};
+context.wrSetTileDebugVisible = () => {};
+vm.runInContext(extract('function wrHandlePayload(', 'function handleMessage('), context);
+context.wrHandlePayload({type:'reload',data:{config:context.wrConfig}});
+assert.equal(reloadRequests, 1, 'HTML reload must refresh the embedded document, not only map configuration');
+console.log('PASS original HTML reload behavior restored');
