@@ -66,7 +66,8 @@ foreach (['rainviewer', 'rainbow', 'meteoswiss'] as $provider) {
     $legend = $legendMethod->invoke($module);
     if ($referenceEntries === null) $referenceEntries = $legend['entries'];
     check($legend['entries'] === $referenceEntries, 'Provider legends must be identical');
-    check(str_contains($legend['note'], 'geschätzt'), 'Estimated mm/h must be labeled');
+    check(!isset($legend['note']), 'No explanatory footer in radar legend');
+    check(str_starts_with($legend['entries'][0]['label'], '≈ '), 'Estimated mm/h remain marked as approximate');
     $configMethod = new ReflectionMethod(Regenradar::class, 'BuildClientConfig');
     $module->properties['Zoom'] = 18;
     $config = $configMethod->invoke($module);

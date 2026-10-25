@@ -1932,8 +1932,7 @@ HTML;
             'type' => 'entries',
             'provider' => $providerName,
             'title' => 'Intensität · Universal Blue',
-            'entries' => $entries,
-            'note' => 'Kontinuierliche Farbskala; mm/h aus dBZ geschätzt (Z = 200 R^1,6). Regen und Schnee verwenden dieselbe Intensitätsskala.'
+            'entries' => $entries
         ];
     }
 
