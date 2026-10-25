@@ -152,6 +152,9 @@ Feedback, Verbesserungsvorschläge und Pull Requests sind jederzeit willkommen.
 
 ## Versionen
 
+**Version 1.5 (25.10.2026)**
+* Radar-Anzeige und Aktualisierung verbessert, Vollbildunterstützung ergänzt.
+
 **Version 1.4 (08.08.2026)**
 * Codebereinigung nach Store-Review.
 
