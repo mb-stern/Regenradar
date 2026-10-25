@@ -107,7 +107,17 @@ Einstellbar sind
 
 ---
 
+## Einheitliche Radarfarben und Zoom
+
+Alle drei Provider verwenden die offizielle Universal-Blue-Intensitätsskala. Die Legende zeigt dBZ-Referenzpunkte und geschätzte mm/h-Werte. Die Umrechnung zwischen Reflektivität und Niederschlagsrate ist eine Näherung; unterschiedliche Messverfahren werden dadurch nicht identisch. Die Regenpalette ist einheitlich; Rainbow liefert fertig eingefärbte Universal-Blue-Bilder. Dessen Schneefarben können von der MeteoSchweiz-Darstellung abweichen.
+
+Kartenzoom ist bis 18 möglich. RainViewer liefert native Radardetails bis Zoom 7, Rainbow bis Zoom 12, MeteoSchweiz ein 1-km-Raster. Darüber werden die vorhandenen Daten nur vergrößert.
+
+RainViewer zeigt etwa zwei Stunden Vergangenheit ohne Vorschau. Rainbow zeigt zwei Stunden Vergangenheit und je nach Einstellung bis vier Stunden Vorschau (Standard eine Stunde). MeteoSchweiz zeigt die letzten zwölf Messbilder ohne Vorschau.
+
 ## Bedienung
+
+Den Radarprovider direkt im Auswahlfeld über der Farbskala wechseln. Die Kachel behält dabei Kartenausschnitt und Zoom bei. Für Rainbow muss ein API-Schlüssel in der Modulkonfiguration hinterlegt sein.
 
 Die Visualisierung bietet
 
@@ -141,6 +151,9 @@ Feedback, Verbesserungsvorschläge und Pull Requests sind jederzeit willkommen.
 ---
 
 ## Versionen
+
+**Version 1.5 (25.10.2026)**
+* Radar-Anzeige und Aktualisierung verbessert, Vollbildunterstützung ergänzt.
 
 **Version 1.4 (08.08.2026)**
 * Codebereinigung nach Store-Review.

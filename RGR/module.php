@@ -6,6 +6,12 @@ class Regenradar extends IPSModuleStrict
     {
         parent::Create();
 
+        $this->SetVisualizationType(
+            defined('INSTANCE_VISUALIZATION_TYPE_HTML_FULLSCREEN')
+                ? INSTANCE_VISUALIZATION_TYPE_HTML_FULLSCREEN
+                : 1
+        );
+
         $this->RegisterPropertyInteger('OpenWeatherInstanceID', 0);
         $this->RegisterPropertyInteger('TemperatureID', 0);
         $this->RegisterPropertyInteger('HumidityID', 0);
@@ -26,14 +32,17 @@ class Regenradar extends IPSModuleStrict
         $this->RegisterAttributeString('WeatherWatchIDs', '[]');
         // Signatur des zuletzt an die Visualisierung übertragenen neuesten Radarframes.
         $this->RegisterAttributeString('LastRadarFrameSignature', '');
-
-        // HTML-SDK aktivieren. 1 = individuelle Darstellung via HTML-SDK.
-        $this->SetVisualizationType(1);
     }
 
     public function ApplyChanges(): void
     {
         parent::ApplyChanges();
+
+        $this->SetVisualizationType(
+            defined('INSTANCE_VISUALIZATION_TYPE_HTML_FULLSCREEN')
+                ? INSTANCE_VISUALIZATION_TYPE_HTML_FULLSCREEN
+                : 1
+        );
 
         // Wetter- und Forecast-Variablen überwachen: bei VM_UPDATE sofort nur die Wetterdaten neu senden.
         $this->RefreshWeatherWatchRegistrations();
@@ -164,7 +173,7 @@ class Regenradar extends IPSModuleStrict
                                 ['caption' => '4 Stunden', 'value' => 4],
                             ],
                         ],
-                        ['type' => 'NumberSpinner', 'name' => 'RadarRefreshSeconds', 'caption' => 'Radar aktualisieren alle Sekunden', 'minimum' => 60],
+                        ['type' => 'NumberSpinner', 'name' => 'RadarRefreshSeconds', 'caption' => 'Radar-Abrufintervall (Sekunden, höchstens Providerintervall)', 'minimum' => 60],
                         ['type' => 'CheckBox', 'name' => 'EnableAutoplay', 'caption' => 'Autoplay aktivieren'],
                         ['type' => 'CheckBox', 'name' => 'ShowTileDebug', 'caption' => 'Tile-Debug im HTML anzeigen'],
                     ],
@@ -173,7 +182,8 @@ class Regenradar extends IPSModuleStrict
                     'type' => 'ExpansionPanel',
                     'caption' => 'Darstellung',
                     'items' => [
-                        ['type' => 'NumberSpinner', 'name' => 'Zoom', 'caption' => 'Start-Zoom', 'minimum' => 1, 'maximum' => 12],
+                        ['type' => 'Label', 'caption' => 'Zoom bis 18 vergrößert die Karte. Radarauflösung: RainViewer bis Zoom 7, Rainbow bis Zoom 12, MeteoSwiss 1 km.'],
+                        ['type' => 'NumberSpinner', 'name' => 'Zoom', 'caption' => 'Start-Zoom', 'minimum' => 1, 'maximum' => 18],
                         [
                             'type' => 'Select',
                             'name' => 'Theme',
@@ -205,6 +215,11 @@ class Regenradar extends IPSModuleStrict
                     'type' => 'Button',
                     'caption' => 'Radar jetzt aktualisieren',
                     'onClick' => 'RGR_UpdateRadar($id);',
+                ],
+                [
+                    'type' => 'Button',
+                    'caption' => 'Rainbow-Verbindung prüfen',
+                    'onClick' => 'echo RGR_CheckRainbowConnection($id);',
                 ],
                 [
                     'type' => 'Button',
@@ -759,7 +774,7 @@ const wrPauseSvg = '<svg viewBox="0 0 24 24"><path d="M8 5h3v14H8V5zm5 0h3v14h-3
 
 function wrSetText(id, value) {
     const el = document.getElementById(id);
-    if (el) el.textContent = value || '–';
+    if (el) { el.textContent = value || '–'; el.title = value || ''; }
 }
 
 function wrNumber(value, digits) {
@@ -898,20 +913,30 @@ function wrAttachTileDebug(layer, frame, layerType, cacheKey) {
         return layer;
     }
 
+    let completedTiles = 0;
+    let failedTiles = 0;
+    layer.on('loading', function() { completedTiles = 0; failedTiles = 0; layer.wrLoadError = false; });
     layer.on('tileloadstart', function() {
         wrTileDebugStats.started++;
         wrTileDebugStats.complete = false;
         wrUpdateTileDebug();
     });
     layer.on('tileload', function() {
+        completedTiles++;
+        layer.wrLoadError = false;
         wrTileDebugStats.loaded++;
         wrUpdateTileDebug();
     });
     layer.on('tileerror', function() {
+        failedTiles++;
         wrTileDebugStats.errors++;
         wrUpdateTileDebug();
     });
     layer.on('load', function() {
+        layer.wrLoadError = failedTiles > 0 && completedTiles === 0;
+        if (wrRadarLayer === layer) {
+            wrSetText('wr-frame-time', layer.wrLoadError ? 'Radartiles nicht erreichbar (API/Schlüssel/Limit prüfen)' : wrFrameTime(frame));
+        }
         const loadedAt = new Date().toLocaleTimeString();
         if (cacheKey) wrRadarLoadedAtCache[cacheKey] = loadedAt;
         wrTileDebugStats.loadedAt = loadedAt;
@@ -940,18 +965,29 @@ function wrLv95FromWgs84(lat, lon) {
     return [east, north];
 }
 
+// Gemeinsame offizielle Universal-Blue-Tabelle. dBZ -> mm/h ist nur eine Z-R-Näherung.
+function wrRadarColor(dbz) {
+    const palette = wrConfig && wrConfig.radarPalette;
+    if (!palette || !Number.isFinite(dbz)) return [0, 0, 0, 0];
+    const index = Math.max(0, Math.min(palette.colors.length - 1, Math.round(dbz) - palette.dbzMin));
+    const hex = palette.colors[index].slice(1);
+    return [0, 2, 4, 6].map(offset => parseInt(hex.slice(offset, offset + 2), 16));
+}
+
 function wrMeteoswissColor(value) {
-    // Kräftige, hoch gesättigte Blau–Gelb–Rot–Violett-Palette für die
-    // selbst gerenderten MeteoSwiss-HDF5-Daten. Die Intensitätsgrenzen
-    // bleiben unverändert; nur Kontrast, Sättigung und Deckkraft sind erhöht.
-    if (!Number.isFinite(value) || value < 0.1) return [0, 0, 0, 0];
-    if (value < 0.5)  return [0, 210, 255, 255];  // kräftiges cyan
-    if (value < 2.5)  return [0, 160, 210, 255];  // kräftiges türkis
-    if (value < 10.0) return [0, 90, 170, 255];   // sattes dunkelblau
-    if (value < 25.0) return [255, 220, 0, 255];  // kräftiges gelb
-    if (value < 50.0) return [255, 130, 0, 255];  // kräftiges orange
-    if (value < 75.0) return [235, 30, 40, 255];  // kräftiges rot
-    return [190, 0, 170, 255];                    // kräftiges magenta / violett
+    if (!Number.isFinite(value) || value <= 0) return [0, 0, 0, 0];
+    const palette = wrConfig && wrConfig.radarPalette;
+    if (!palette) return [0, 0, 0, 0];
+    return wrRadarColor(10 * Math.log10(palette.zrA * Math.pow(value, palette.zrB)));
+}
+
+// Leaflet imageOverlay streckt das Bild in Web Mercator, nicht linear im Breitengrad.
+function wrMeteoswissLatitude(row, height, south, north) {
+    const toMercator = lat => Math.log(Math.tan(Math.PI / 4 + lat * Math.PI / 360));
+    const top = toMercator(north);
+    const bottom = toMercator(south);
+    const projected = top - ((row + 0.5) / height) * (top - bottom);
+    return (2 * Math.atan(Math.exp(projected)) - Math.PI / 2) * 180 / Math.PI;
 }
 
 async function wrBuildMeteoswissImage(frame, layer, cacheKey) {
@@ -990,7 +1026,7 @@ async function wrBuildMeteoswissImage(frame, layer, cacheKey) {
         const scale = 1000;
 
         for (let y = 0; y < srcHeight; y++) {
-            const lat = north - ((y + 0.5) / srcHeight) * (north - south);
+            const lat = wrMeteoswissLatitude(y, srcHeight, south, north);
             for (let x = 0; x < srcWidth; x++) {
                 const lon = west + ((x + 0.5) / srcWidth) * (east - west);
                 const lv = wrLv95FromWgs84(lat, lon);
@@ -1041,14 +1077,14 @@ function wrBuildRadarLayer(frame) {
         const tileSize = window.devicePixelRatio >= 2 ? 512 : 256;
         layer = L.tileLayer(
             host + frame.path + '/' + tileSize + '/{z}/{x}/{y}/2/1_1.png',
-            { tileSize: 256, opacity: 0, maxNativeZoom: 7, maxZoom: 7 }
+            { tileSize: 256, opacity: 0, maxNativeZoom: 7, maxZoom: 18 }
         );
     }
 
     if (wrRadarPayload.provider === 'rainbow') {
         layer = L.tileLayer(
             frame.url,
-            { tileSize: 256, opacity: 0, maxNativeZoom: 12, maxZoom: 12 }
+            { tileSize: 256, opacity: 0, maxNativeZoom: 12, maxZoom: 18 }
         );
     }
 
@@ -1099,7 +1135,7 @@ function wrRadarCacheKey(frame) {
 
 function wrPruneRadarLayerCache(validKeys) {
     for (const key in wrRadarLayerCache) {
-        if (Object.prototype.hasOwnProperty.call(wrRadarLayerCache, key) && !validKeys[key]) {
+        if (Object.prototype.hasOwnProperty.call(wrRadarLayerCache, key) && (!validKeys[key] || wrRadarLayerCache[key].wrLoadError)) {
             try { wrMap.removeLayer(wrRadarLayerCache[key]); } catch(e) {}
             if (wrRadarLayer === wrRadarLayerCache[key]) {
                 wrRadarLayer = null;
@@ -1163,7 +1199,7 @@ function wrShowFrame(index) {
     wrFrameIndex = index;
 
     if (slider) slider.value = String(index);
-    wrSetText('wr-frame-time', wrFrameTime(frame));
+    wrSetText('wr-frame-time', layer.wrLoadError ? 'Radartiles nicht erreichbar (API/Schlüssel/Limit prüfen)' : wrFrameTime(frame));
 }
 
 function wrPlayAnimation() {
@@ -1369,9 +1405,7 @@ function wrInitMap(config) {
     wrSetTileDebugVisible();
 
     const root = document.getElementById('wetterradar-root');
-    if (root && config.theme === 'light') {
-        root.classList.add('wr-light');
-    }
+    if (root) root.classList.toggle('wr-light', config.theme === 'light');
 
     wrMap = L.map('map', {
         zoomControl: true,
@@ -1382,6 +1416,7 @@ function wrInitMap(config) {
 
     const options = {
         maxZoom: config.radarMaxZoom || 7,
+        maxNativeZoom: 17,
         attribution: config.mapAttribution || ''
     };
 
@@ -1399,6 +1434,15 @@ function wrRenderRadar(payload) {
     // Bei einer laufenden Animation den Zustand über das Radar-Update hinweg erhalten.
     const wasPlaying = wrAnimationTimer !== null;
     wrStopAnimation();
+    if (wrMap.attributionControl) {
+        const credits = {
+            rainviewer: 'Weather data by <a href="https://www.rainviewer.com/">RainViewer</a>',
+            rainbow: '<a href="https://www.rainbow.ai/">Rainbow Weather</a>',
+            meteoswiss: '<a href="https://www.meteoswiss.admin.ch/">MeteoSwiss Open Data</a> (CC BY)'
+        };
+        Object.values(credits).forEach(credit => wrMap.attributionControl.removeAttribution(credit));
+        if (credits[payload.provider]) wrMap.attributionControl.addAttribution(credits[payload.provider]);
+    }
     wrRadarPayload = payload;
 
     wrFrames = Array.isArray(payload.frames) ? payload.frames.slice() : [];
@@ -1445,7 +1489,7 @@ function wrRenderRadar(payload) {
 
     // Konfiguriertes Autoplay startet initial automatisch. Wurde die Animation
     // manuell gestartet, läuft sie nach einem Poll ebenfalls weiter.
-    if (wasPlaying || (wrConfig && wrConfig.enableAutoplay)) {
+    if (document.visibilityState === 'visible' && (wasPlaying || (wrConfig && wrConfig.enableAutoplay))) {
         wrPlayAnimation();
     }
 }
@@ -1658,14 +1702,70 @@ window.addEventListener('beforeunload', function() {
     wrStopAnimation();
 });
 
-requestAction('RefreshRadar', true);
-wrStartRadarRefreshTimer();
+if (document.visibilityState === 'visible') {
+    requestAction('RefreshRadar', true);
+    wrStartRadarRefreshTimer();
+}
 
 setTimeout(function() {
     if (wrMap) wrMap.invalidateSize();
 }, 250);
 </script>
 HTML;
+    }
+
+    public function CheckRainbowConnection(): string
+    {
+        $apiKey = trim($this->ReadPropertyString('RainbowApiKey'));
+        if ($apiKey === '') return "Rainbow: API-Key fehlt in der Modulkonfiguration.";
+
+        $snapshot = $this->HttpGetResult(
+            'https://api.rainbow.ai/tiles/v1/snapshot?layer=precip',
+            ['Ocp-Apim-Subscription-Key: ' . $apiKey, 'Cache-Control: no-cache'],
+            10
+        );
+        $lines = ['Serverseitiger Rainbow-Verbindungstest', $this->DescribeRainbowResponse('Snapshot', $snapshot)];
+        if ($snapshot['status'] !== 200 || $snapshot['error'] !== 0) return implode("\n", $lines);
+        $data = json_decode($snapshot['body'], true);
+        $timestamp = is_array($data) ? ($data['snapshot'] ?? null) : null;
+        if (!is_numeric($timestamp) || (int) $timestamp <= 0) {
+            $lines[] = 'Snapshot-Antwort enthält keinen gültigen Zeitstempel.';
+            return implode("\n", $lines);
+        }
+        $timestamp = (int) $timestamp;
+        $lines[] = 'Datenzeit: ' . gmdate('Y-m-d H:i:s', $timestamp) . ' UTC';
+        [$lat, $lon] = $this->GetLocation();
+        $zoom = 7;
+        $lat = max(-85.05112878, min(85.05112878, $lat));
+        $lon = max(-180.0, min(180.0, $lon));
+        $x = max(0, min(127, (int) floor(($lon + 180) / 360 * 128)));
+        $radians = deg2rad($lat);
+        $y = max(0, min(127, (int) floor((1 - log(tan($radians) + 1 / cos($radians)) / M_PI) / 2 * 128)));
+        $url = str_replace(['{z}', '{x}', '{y}'], [(string) $zoom, (string) $x, (string) $y],
+            $this->BuildRainbowTileUrl('precip', $timestamp, 0, 8, $apiKey));
+        $tile = $this->HttpGetResult($url, [], 15);
+        $lines[] = $this->DescribeRainbowResponse('Tile (Standort, Zoom 7)', $tile);
+        if ($tile['status'] === 200 && $tile['error'] === 0) {
+            if (str_starts_with($tile['body'], "\x89PNG\r\n\x1a\n") && @getimagesizefromstring($tile['body']) !== false) {
+                $lines[] = 'PNG-Bild empfangen. Das bestätigt den API-Abruf, nicht Regen am Standort oder den Abruf im Browser.';
+            } else {
+                $lines[] = 'Fehler: Tile-Antwort ist kein gültiges PNG-Bild.';
+            }
+        }
+        return implode("\n", $lines);
+    }
+
+    private function DescribeRainbowResponse(string $step, array $response): string
+    {
+        $reason = $response['error'] !== 0 ? 'Netzwerk-/TLS-/Timeoutfehler' : match ($response['status']) {
+            200 => 'OK',
+            401 => 'API-Schlüssel abgelehnt',
+            403 => 'Zugriff verweigert; Berechtigungen/Tarif prüfen',
+            404 => 'Frame oder Tile nicht verfügbar',
+            429 => 'Anfragelimit erreicht',
+            default => $response['status'] >= 500 ? 'Anbieterfehler' : 'Unerwartete Antwort'
+        };
+        return $step . ': HTTP ' . (int) $response['status'] . ' – ' . $reason;
     }
 
     public function UpdateWeather(): void
@@ -1726,7 +1826,7 @@ HTML;
     {
         [$lat, $lon] = $this->GetLocation();
         $provider = $this->ReadPropertyString('RadarProvider');
-        $radarMaxZoom = ($provider === 'rainbow' || $provider === 'meteoswiss') ? 12 : 7;
+        $radarMaxZoom = 18; // Höherer Kartenzoom vergrößert vorhandene Radardaten (Overzoom).
         $zoom = min(max(1, $this->ReadPropertyInteger('Zoom')), $radarMaxZoom);
         [$mapTileUrl, $mapAttribution, $subdomains] = $this->GetMapStyle();
 
@@ -1737,14 +1837,22 @@ HTML;
             'theme' => $this->ReadPropertyString('Theme'),
             'radarProvider' => $provider,
             'radarMaxZoom' => $radarMaxZoom,
-            'radarRefreshSeconds' => max(60, $this->ReadPropertyInteger('RadarRefreshSeconds')),
+            'radarRefreshSeconds' => $this->GetRadarRefreshSeconds(),
             'enableAutoplay' => $this->ReadPropertyBoolean('EnableAutoplay'),
             'showTileDebug' => $this->ReadPropertyBoolean('ShowTileDebug'),
             'legend' => $this->BuildRadarLegendPayload(),
+            'radarPalette' => $this->GetRadarPalette(),
             'mapTileUrl' => $mapTileUrl,
             'mapAttribution' => $mapAttribution,
             'mapSubdomains' => $subdomains
         ];
+    }
+
+    private function GetRadarRefreshSeconds(): int
+    {
+        // Ein konfiguriertes 10-Minuten-Intervall darf MeteoSwiss-Frames nicht überspringen.
+        $providerInterval = $this->ReadPropertyString('RadarProvider') === 'meteoswiss' ? 300 : 600;
+        return min($providerInterval, max(60, $this->ReadPropertyInteger('RadarRefreshSeconds')));
     }
 
     private function RefreshWeatherWatchRegistrations(): void
@@ -1826,36 +1934,27 @@ HTML;
             default => 'RainViewer',
         };
 
-        // RainViewer und Rainbow behalten ihre bisherige Tile-Legende.
-        // MeteoSwiss wird im Browser selbst gerendert und erhält deshalb die
-        // kräftigeren Farben aus wrMeteoswissColor(), damit Legende und Bild
-        // weiterhin exakt übereinstimmen.
-        $entries = $provider === 'meteoswiss'
-            ? [
-                ['color' => '#00d2ff', 'label' => '0,1–0,5 mm/h'],
-                ['color' => '#00a0d2', 'label' => '0,5–2,5 mm/h'],
-                ['color' => '#005aaa', 'label' => '2,5–10 mm/h'],
-                ['color' => '#ffdc00', 'label' => '10–25 mm/h'],
-                ['color' => '#ff8200', 'label' => '25–50 mm/h'],
-                ['color' => '#eb1e28', 'label' => '50–75 mm/h'],
-                ['color' => '#be00aa', 'label' => '≥ 75 mm/h'],
-            ]
-            : [
-                ['color' => '#8ee6f2', 'label' => '0,1–0,5 mm/h'],
-                ['color' => '#45bfd3', 'label' => '0,5–2,5 mm/h'],
-                ['color' => '#287f9e', 'label' => '2,5–10 mm/h'],
-                ['color' => '#ffe43b', 'label' => '10–25 mm/h'],
-                ['color' => '#f59a45', 'label' => '25–50 mm/h'],
-                ['color' => '#d95858', 'label' => '50–75 mm/h'],
-                ['color' => '#a84f72', 'label' => '≥ 75 mm/h'],
+        $palette = $this->GetRadarPalette();
+        $entries = [];
+        foreach ([15, 20, 25, 30, 35, 40, 45, 50, 55, 60] as $dbz) {
+            $rate = pow(pow(10, $dbz / 10) / $palette['zrA'], 1 / $palette['zrB']);
+            $entries[] = [
+                'color' => $palette['colors'][$dbz - $palette['dbzMin']],
+                'label' => '≈ ' . number_format($rate, 1, ',', '') . ' mm/h (' . $dbz . ' dBZ)'
             ];
+        }
 
         return [
             'type' => 'entries',
             'provider' => $providerName,
-            'title' => 'Niederschlag (mm/h)',
+            'title' => 'Intensität · Universal Blue',
             'entries' => $entries
         ];
+    }
+
+    private function GetRadarPalette(): array
+    {
+        return json_decode(file_get_contents(__DIR__ . '/radar-palette.json'), true, 512, JSON_THROW_ON_ERROR);
     }
 
     private function BuildWeatherPayload(): array
@@ -2082,7 +2181,7 @@ HTML;
     {
         $apiKey = trim($this->ReadPropertyString('RainbowApiKey'));
         $layer = 'precip';
-        $color = 8; // RainViewer Universal Blue / Original
+        $color = 8; // Fertige Universal-Blue-PNGs: keine CORS-/Canvas-Lesefreigabe erforderlich.
 
         if ($apiKey === '') {
             $this->SendDebug(
@@ -2098,7 +2197,15 @@ HTML;
         }
 
         $snapshotUrl = 'https://api.rainbow.ai/tiles/v1/snapshot?layer=' . rawurlencode($layer);
-        $json = $this->HttpGet($snapshotUrl, ['Ocp-Apim-Subscription-Key: ' . $apiKey], 10);
+        $json = $this->HttpGet(
+            $snapshotUrl,
+            [
+                'Ocp-Apim-Subscription-Key: ' . $apiKey,
+                'Cache-Control: no-cache',
+                'Pragma: no-cache'
+            ],
+            10
+        );
         $data = json_decode($json, true);
         $snapshot = (is_array($data) && isset($data['snapshot'])) ? (int) $data['snapshot'] : 0;
 
@@ -2116,7 +2223,7 @@ HTML;
             ];
         }
 
-        $pastSteps = [-3600, -3000, -2400, -1800, -1200, -600];
+        $pastSteps = range(-7200, -600, 600);
         // Rainbow unterstützt Zukunftsframes in 10-Minuten-Schritten bis maximal 4 Stunden.
         $forecastHours = max(1, min(4, $this->ReadPropertyInteger('RainbowForecastHours')));
         $forecastSteps = range(0, $forecastHours * 3600, 600);
@@ -2152,7 +2259,7 @@ HTML;
         ];
     }
 
-    private function BuildRainbowTileUrl(string $layer, int $snapshot, int $forecastTime, int $color, string $apiKey): string
+    private function BuildRainbowTileUrl(string $layer, int $snapshot, int $forecastTime, int|string $color, string $apiKey): string
     {
         return 'https://api.rainbow.ai/tiles/v1/' . rawurlencode($layer) . '/' . $snapshot . '/' . $forecastTime . '/{z}/{x}/{y}?color=' . $color . '&token=' . rawurlencode($apiKey);
     }
@@ -2346,6 +2453,19 @@ HTML;
 
     private function HttpGet(string $url, array $headers = [], int $timeout = 10): string
     {
+        $response = $this->HttpGetResult($url, $headers, $timeout);
+        if ($response['status'] < 200 || $response['status'] >= 300 || $response['error'] !== 0) {
+            // Keine Queryparameter/Schlüssel in Diagnoseausgaben übernehmen.
+            $safeUrl = (string) parse_url($url, PHP_URL_SCHEME) . '://' .
+                (string) parse_url($url, PHP_URL_HOST) . (string) parse_url($url, PHP_URL_PATH);
+            $this->SendDebug('HttpGet', 'HTTP=' . $response['status'] . ' Transport=' . $response['error'] . ' URL=' . $safeUrl, 0);
+            return '';
+        }
+        return $response['body'];
+    }
+
+    protected function HttpGetResult(string $url, array $headers = [], int $timeout = 10): array
+    {
         if (function_exists('curl_init')) {
             $ch = curl_init($url);
             curl_setopt_array($ch, [
@@ -2357,25 +2477,24 @@ HTML;
                 CURLOPT_HTTPHEADER => $headers
             ]);
             $result = curl_exec($ch);
-            $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            $error = curl_error($ch);
+            $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $error = curl_errno($ch);
             curl_close($ch);
-
-            if ($result === false || $httpCode < 200 || $httpCode >= 300) {
-                $this->SendDebug('HttpGet', 'HTTP=' . $httpCode . ' Error=' . $error . ' URL=' . $url, 0);
-                return '';
-            }
-
-            return (string) $result;
+            return ['status' => $status, 'error' => $error, 'body' => $result === false ? '' : (string) $result];
         }
 
         $context = stream_context_create([
             'http' => [
                 'timeout' => $timeout,
-                'header' => implode("\r\n", $headers)
+                'ignore_errors' => true,
+                'header' => implode("\r\n", array_merge(['User-Agent: IP-Symcon Wetterradar HTML-SDK'], $headers))
             ]
         ]);
         $result = @file_get_contents($url, false, $context);
-        return ($result === false) ? '' : (string) $result;
+        $status = 0;
+        foreach ($http_response_header ?? [] as $header) {
+            if (preg_match('/^HTTP\/\S+\s+(\d{3})/', $header, $match)) $status = (int) $match[1];
+        }
+        return ['status' => $status, 'error' => $result === false ? 1 : 0, 'body' => $result === false ? '' : (string) $result];
     }
 }
