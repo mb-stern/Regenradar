@@ -218,6 +218,11 @@ class Regenradar extends IPSModuleStrict
                 ],
                 [
                     'type' => 'Button',
+                    'caption' => 'Rainbow-Verbindung prüfen',
+                    'onClick' => 'echo RGR_CheckRainbowConnection($id);',
+                ],
+                [
+                    'type' => 'Button',
                     'caption' => 'HTML neu laden',
                     'onClick' => 'IPS_RequestAction($id, "ReloadHtml", true);',
                 ],
@@ -839,7 +844,7 @@ function wrRadarCacheKey(frame) {
 
 function wrPruneRadarLayerCache(validKeys) {
     for (const key in wrRadarLayerCache) {
-        if (Object.prototype.hasOwnProperty.call(wrRadarLayerCache, key) && !validKeys[key]) {
+        if (Object.prototype.hasOwnProperty.call(wrRadarLayerCache, key) && (!validKeys[key] || wrRadarLayerCache[key].wrLoadError)) {
             try { wrMap.removeLayer(wrRadarLayerCache[key]); } catch(e) {}
             if (wrRadarLayer === wrRadarLayerCache[key]) {
                 wrRadarLayer = null;
@@ -1397,6 +1402,60 @@ setTimeout(function() {
 }, 250);
 </script>
 HTML;
+    }
+
+    public function CheckRainbowConnection(): string
+    {
+        $apiKey = trim($this->ReadPropertyString('RainbowApiKey'));
+        if ($apiKey === '') return "Rainbow: API-Key fehlt in der Modulkonfiguration.";
+
+        $snapshot = $this->HttpGetResult(
+            'https://api.rainbow.ai/tiles/v1/snapshot?layer=precip',
+            ['Ocp-Apim-Subscription-Key: ' . $apiKey, 'Cache-Control: no-cache'],
+            10
+        );
+        $lines = ['Serverseitiger Rainbow-Verbindungstest', $this->DescribeRainbowResponse('Snapshot', $snapshot)];
+        if ($snapshot['status'] !== 200 || $snapshot['error'] !== 0) return implode("\n", $lines);
+        $data = json_decode($snapshot['body'], true);
+        $timestamp = is_array($data) ? ($data['snapshot'] ?? null) : null;
+        if (!is_numeric($timestamp) || (int) $timestamp <= 0) {
+            $lines[] = 'Snapshot-Antwort enthält keinen gültigen Zeitstempel.';
+            return implode("\n", $lines);
+        }
+        $timestamp = (int) $timestamp;
+        $lines[] = 'Datenzeit: ' . gmdate('Y-m-d H:i:s', $timestamp) . ' UTC';
+        [$lat, $lon] = $this->GetLocation();
+        $zoom = 7;
+        $lat = max(-85.05112878, min(85.05112878, $lat));
+        $lon = max(-180.0, min(180.0, $lon));
+        $x = max(0, min(127, (int) floor(($lon + 180) / 360 * 128)));
+        $radians = deg2rad($lat);
+        $y = max(0, min(127, (int) floor((1 - log(tan($radians) + 1 / cos($radians)) / M_PI) / 2 * 128)));
+        $url = str_replace(['{z}', '{x}', '{y}'], [(string) $zoom, (string) $x, (string) $y],
+            $this->BuildRainbowTileUrl('precip', $timestamp, 0, 8, $apiKey));
+        $tile = $this->HttpGetResult($url, [], 15);
+        $lines[] = $this->DescribeRainbowResponse('Tile (Standort, Zoom 7)', $tile);
+        if ($tile['status'] === 200 && $tile['error'] === 0) {
+            if (str_starts_with($tile['body'], "\x89PNG\r\n\x1a\n") && @getimagesizefromstring($tile['body']) !== false) {
+                $lines[] = 'PNG-Bild empfangen. Das bestätigt den API-Abruf, nicht Regen am Standort oder den Abruf im Browser.';
+            } else {
+                $lines[] = 'Fehler: Tile-Antwort ist kein gültiges PNG-Bild.';
+            }
+        }
+        return implode("\n", $lines);
+    }
+
+    private function DescribeRainbowResponse(string $step, array $response): string
+    {
+        $reason = $response['error'] !== 0 ? 'Netzwerk-/TLS-/Timeoutfehler' : match ($response['status']) {
+            200 => 'OK',
+            401 => 'API-Schlüssel abgelehnt',
+            403 => 'Zugriff verweigert; Berechtigungen/Tarif prüfen',
+            404 => 'Frame oder Tile nicht verfügbar',
+            429 => 'Anfragelimit erreicht',
+            default => $response['status'] >= 500 ? 'Anbieterfehler' : 'Unerwartete Antwort'
+        };
+        return $step . ': HTTP ' . (int) $response['status'] . ' – ' . $reason;
     }
 
     public function UpdateWeather(): void
@@ -2084,6 +2143,19 @@ HTML;
 
     private function HttpGet(string $url, array $headers = [], int $timeout = 10): string
     {
+        $response = $this->HttpGetResult($url, $headers, $timeout);
+        if ($response['status'] < 200 || $response['status'] >= 300 || $response['error'] !== 0) {
+            // Keine Queryparameter/Schlüssel in Diagnoseausgaben übernehmen.
+            $safeUrl = (string) parse_url($url, PHP_URL_SCHEME) . '://' .
+                (string) parse_url($url, PHP_URL_HOST) . (string) parse_url($url, PHP_URL_PATH);
+            $this->SendDebug('HttpGet', 'HTTP=' . $response['status'] . ' Transport=' . $response['error'] . ' URL=' . $safeUrl, 0);
+            return '';
+        }
+        return $response['body'];
+    }
+
+    protected function HttpGetResult(string $url, array $headers = [], int $timeout = 10): array
+    {
         if (function_exists('curl_init')) {
             $ch = curl_init($url);
             curl_setopt_array($ch, [
@@ -2095,25 +2167,24 @@ HTML;
                 CURLOPT_HTTPHEADER => $headers
             ]);
             $result = curl_exec($ch);
-            $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            $error = curl_error($ch);
+            $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $error = curl_errno($ch);
             curl_close($ch);
-
-            if ($result === false || $httpCode < 200 || $httpCode >= 300) {
-                $this->SendDebug('HttpGet', 'HTTP=' . $httpCode . ' Error=' . $error . ' URL=' . $url, 0);
-                return '';
-            }
-
-            return (string) $result;
+            return ['status' => $status, 'error' => $error, 'body' => $result === false ? '' : (string) $result];
         }
 
         $context = stream_context_create([
             'http' => [
                 'timeout' => $timeout,
-                'header' => implode("\r\n", $headers)
+                'ignore_errors' => true,
+                'header' => implode("\r\n", array_merge(['User-Agent: IP-Symcon Wetterradar HTML-SDK'], $headers))
             ]
         ]);
         $result = @file_get_contents($url, false, $context);
-        return ($result === false) ? '' : (string) $result;
+        $status = 0;
+        foreach ($http_response_header ?? [] as $header) {
+            if (preg_match('/^HTTP\/\S+\s+(\d{3})/', $header, $match)) $status = (int) $match[1];
+        }
+        return ['status' => $status, 'error' => $result === false ? 1 : 0, 'body' => $result === false ? '' : (string) $result];
     }
 }

@@ -97,3 +97,53 @@ foreach (['rainviewer' => 600, 'rainbow' => 600, 'meteoswiss' => 300] as $provid
     }
 }
 echo "PASS provider refresh cadence and configured faster intervals\n";
+
+class RainbowDiagnosticFixture extends Regenradar
+{
+    public array $responses = [];
+    public array $requests = [];
+    public array $debug = [];
+    protected function HttpGetResult(string $url, array $headers = [], int $timeout = 10): array
+    {
+        $this->requests[] = ['url' => $url, 'headers' => $headers];
+        if (!$this->responses) throw new RuntimeException('Unexpected HTTP request');
+        return array_shift($this->responses);
+    }
+    protected function SendDebug(...$args) { $this->debug[] = $args; }
+}
+$diagnostic = new RainbowDiagnosticFixture();
+$diagnostic->Create();
+check(str_contains($diagnostic->CheckRainbowConnection(), 'API-Key fehlt'), 'Missing key diagnostic');
+check($diagnostic->requests === [], 'No HTTP call without a configured key');
+$diagnostic->properties['RainbowApiKey'] = 'TEST_KEY_DO_NOT_PRINT';
+foreach ([401 => 'abgelehnt', 403 => 'verweigert', 404 => 'nicht verfügbar', 429 => 'Anfragelimit', 503 => 'Anbieterfehler', 0 => 'Timeoutfehler'] as $status => $reason) {
+    $diagnostic->responses = [['status' => $status, 'error' => $status === 0 ? 28 : 0, 'body' => 'TEST_KEY_DO_NOT_PRINT']];
+    $result = $diagnostic->CheckRainbowConnection();
+    check(str_contains($result, $reason), 'Diagnostic must classify snapshot failures');
+    check(!str_contains($result, 'TEST_KEY_DO_NOT_PRINT'), 'Diagnostic must not expose response bodies or keys');
+}
+$png = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==');
+$diagnostic->responses = [
+    ['status' => 200, 'error' => 0, 'body' => '{"snapshot":1792957800}'],
+    ['status' => 200, 'error' => 0, 'body' => $png]
+];
+$result = $diagnostic->CheckRainbowConnection();
+check(str_contains($result, 'PNG-Bild empfangen'), 'Diagnostic must validate a real PNG response');
+check(!str_contains($result, 'TEST_KEY_DO_NOT_PRINT'), 'Successful diagnostic must not expose the key');
+$request = end($diagnostic->requests);
+check(str_contains($request['url'], '/tiles/v1/precip/1792957800/0/7/64/64?color=8&token='), 'Diagnostic must test the same tile API/query authentication as the browser');
+$diagnostic->responses = [
+    ['status' => 200, 'error' => 0, 'body' => '{"snapshot":1792957800}'],
+    ['status' => 429, 'error' => 0, 'body' => 'private response']
+];
+check(str_contains($diagnostic->CheckRainbowConnection(), 'Anfragelimit'), 'Tile limits must remain distinguishable from snapshot success');
+$diagnostic->responses = [
+    ['status' => 200, 'error' => 0, 'body' => '{"snapshot":1792957800}'],
+    ['status' => 200, 'error' => 0, 'body' => 'not a PNG']
+];
+check(str_contains($diagnostic->CheckRainbowConnection(), 'kein gültiges PNG'), 'Invalid image response must fail');
+$diagnostic->responses = [['status' => 401, 'error' => 0, 'body' => 'private response']];
+$http = new ReflectionMethod(Regenradar::class, 'HttpGet');
+check($http->invoke($diagnostic, 'https://api.rainbow.ai/test?token=TEST_KEY_DO_NOT_PRINT') === '', 'Failed HTTP must not become application data');
+check(!str_contains(json_encode($diagnostic->debug), 'TEST_KEY_DO_NOT_PRINT'), 'HTTP debug output must redact query credentials');
+echo "PASS separate snapshot/tile diagnostics, PNG validation, HTTP classifications and credential redaction\n";

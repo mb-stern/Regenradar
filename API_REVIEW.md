@@ -142,3 +142,16 @@ node tests/layout.cjs /tmp/regenradar-test.js.html /tmp/leaflet.js /tmp/leaflet.
 ```
 
 Dafür muss wie für `tests/browser.cjs` ein lokaler Chromium-CDP-Endpunkt auf Port 9222 laufen. Leaflet 1.9.4 und dessen CSS werden lokal bereitgestellt. Tests erfolgen weiterhin zusätzlich zu einer noch offenen Bedien- und API-Prüfung in der echten Symcon-Instanz.
+
+## Wiederkehrend leere Rainbow-Regenzellen: Cache und Live-Diagnose
+
+Ein nachweisbarer Modulfehler wurde korrigiert: Radar-Layer mit vollständig fehlgeschlagenem Tile-Ladevorgang wurden bisher auch bei einem erneuten Metadatenabruf wiederverwendet, solange der Frame noch gültig war. Solche fehlerhaften Layer werden jetzt beim nächsten Radar-Payload verworfen und neu geladen. Erfolgreiche Layer bleiben gecacht. Der Regressionstest simuliert einen unveränderten Snapshot und prüft genau diese Unterscheidung. Das belegt einen korrigierten Wiederherstellungsfehler, nicht die Ursache des ersten Tile-Ausfalls.
+
+In der Modulkonfiguration gibt es jetzt **„Rainbow-Verbindung prüfen“** (`RGR_CheckRainbowConnection`). Der manuell ausgelöste Test verwendet den bereits konfigurierten Schlüssel und führt maximal zwei Abrufe aus:
+
+1. Snapshot mit der dokumentierten Header-Authentifizierung.
+2. Ein Universal-Blue-Niederschlags-Tile am konfigurierten Standort, Zoom 7, Forecast-Offset 0, mit derselben Token-Query-Authentifizierung wie der Browser.
+
+Die Ausgabe enthält ausschließlich Status und Einordnung, den Datenzeitpunkt und das Ergebnis einer PNG-Prüfung. Schlüssel, URLs mit Tokens und Antworttexte werden nicht ausgegeben. Auch reguläre HTTP-Debug-Meldungen enthalten nun keine URL-Queryparameter mehr. 401 (Schlüssel), 403 (Berechtigung/Tarif), 404 (Frame/Tile), 429 (Limit), Anbieterfehler und Transportfehler sind unterscheidbar. Ein gültiges PNG beweist Erreichbarkeit, aber weder Regen am Standort noch einen erfolgreichen Browserabruf.
+
+Der native PHP-HTTP-Transport wurde gegen einen lokalen HTTP-Testserver mit 200/401 geprüft; das Diagnoseverhalten mit isolierten Antworten für Erfolg und Fehler. Authentifizierte Rainbow-Liveantworten sind hier weiterhin nicht verfügbar. Für die weitere Eingrenzung in der betroffenen Symcon-Instanz den neuen Knopf betätigen und dessen schlüsselfreie Textausgabe verwenden. Es werden weiterhin ausschließlich Niederschlagsbilder dargestellt.
