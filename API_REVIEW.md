@@ -150,3 +150,12 @@ Auf Nutzerwunsch wurden CSS, Anordnung, Legende, Vorhersage und Größenposition
 Auf erneuten Nutzerwunsch wurden CSS, HTML-Anordnung, initiale Skalierung, Legenden-/Vorhersageaufbau, Größenpositionierung und der HTML-Reload-Handler direkt gegen den ursprünglichen Commit `7128469` abgeglichen und exakt daraus wiederhergestellt. Es gibt keine kompakte Grid-Ansicht und keine „Skala“-/„Vorhersage“-Aufklappschalter mehr. Die später hinzugefügte Aktualisierung ohne Seitenreload wurde ebenfalls entfernt: Ein Reload fordert jetzt wieder ein Neuladen des eingebetteten Dokuments an. Die vorigen Hinweise auf Erhalt des Kartenausschnitts bei Providerwechsel beschreiben damit nicht mehr den aktuellen Stand. Rainbow-PNGs, Cache-Wiederholung, Diagnose und sonstige API-Korrekturen sind unverändert erhalten.
 
 Ein noch angezeigter „Skala“-Knopf kennzeichnet die zwischenzeitliche HTML-Version und kommt im aktuellen Quelltext nicht vor. Nach dem Modulupdate die gesamte Visualisierung im Browser vollständig neu laden; eine bereits laufende alte Kachel kann ihren bisherigen JavaScript-Code weiter ausführen. Die Rücknahme wurde per direktem Vergleich aller genannten Abschnitte mit `7128469` sowie den PHP-/JavaScript-Regressionstests geprüft.
+
+
+## Korrekturen innerhalb Version 1.6 (15.11.2026)
+
+Teilweise fehlgeschlagene Tile-Layer werden jetzt ebenfalls für das Neuladen verworfen. Fehlgeschlagene Koordinaten werden pro Layer gespeichert; ein erfolgreiches anderes Tile oder ein weiterer Ladezyklus löscht diesen Status nicht. Erfolgreiches Nachladen derselben Koordinate kann den Fehler beheben, andernfalls baut der nächste Radar-Payload den unvollständigen Layer neu auf. Vollständige Layer bleiben im Cache.
+
+MeteoSchweiz prüft ein Tagesitem jetzt auf tatsächlich nutzbare RZC-Frames, bevor es die Rückwärtssuche beendet. Leere Items, Items mit ausschließlich anderen Produkten sowie RZC-Assets ohne brauchbaren Link führen zum Vortag weiter. Die UTC-Tagesauswahl, maximal drei geprüfte Tage, Sortierung und Begrenzung auf zwölf Frames bleiben erhalten.
+
+Regressionstests decken gemischte Tile-Ergebnisse, spätere Ladezyklen, gezielte erfolgreiche Wiederholungen und Cachebereinigung ab. STAC-Testantworten prüfen den Tageswechsel, fehlende/ungeeignete Assets, 404, Sortierung und begrenzte Rückwärtssuche. Versionsnummer und Layout bleiben unverändert; eine Ladebegrenzung wurde nicht hinzugefügt.
