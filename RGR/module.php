@@ -1940,14 +1940,13 @@ HTML;
             $rate = pow(pow(10, $dbz / 10) / $palette['zrA'], 1 / $palette['zrB']);
             $entries[] = [
                 'color' => $palette['colors'][$dbz - $palette['dbzMin']],
-                'label' => '≈ ' . number_format($rate, 1, ',', '')
+                'label' => '≈ ' . number_format($rate, 1, ',', '') . ' mm/h'
             ];
         }
 
         return [
             'type' => 'entries',
             'provider' => $providerName,
-            'title' => 'mm/h',
             'entries' => $entries
         ];
     }
