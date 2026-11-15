@@ -154,6 +154,7 @@ Feedback, Verbesserungsvorschläge und Pull Requests sind jederzeit willkommen.
 
 **Version 1.6 (15.11.2026)**
 * Schmalere Legende mit mm/h direkt am Wert, ohne dBZ und Zusatzüberschrift.
+* Teilweise fehlende Radarbilder und MeteoSwiss-Tageswechsel korrigiert.
 
 **Version 1.5 (25.10.2026)**
 * Radar-Anzeige und Aktualisierung verbessert, Vollbildunterstützung ergänzt.

@@ -147,3 +147,48 @@ $http = new ReflectionMethod(Regenradar::class, 'HttpGet');
 check($http->invoke($diagnostic, 'https://api.rainbow.ai/test?token=TEST_KEY_DO_NOT_PRINT') === '', 'Failed HTTP must not become application data');
 check(!str_contains(json_encode($diagnostic->debug), 'TEST_KEY_DO_NOT_PRINT'), 'HTTP debug output must redact query credentials');
 echo "PASS separate snapshot/tile diagnostics, PNG validation, HTTP classifications and credential redaction\n";
+
+
+// MeteoSwiss daily STAC items can exist before their first RZC asset appears.
+function meteoResponse(array $assets): array {
+    return ['status' => 200, 'error' => 0, 'body' => json_encode(['assets' => $assets])];
+}
+function meteoAsset(int $timestamp): array {
+    $name = 'rzc' . gmdate('y', $timestamp) . sprintf('%03d', (int) gmdate('z', $timestamp) + 1) . gmdate('Hi', $timestamp) . 'rl.001.h5';
+    return [$name => ['href' => 'https://example.invalid/' . $name]];
+}
+$midnight = gmmktime(0, 0, 0, (int) gmdate('m'), (int) gmdate('d'), (int) gmdate('Y'));
+$previousFrame = $midnight - 300;
+$meteoMethod = new ReflectionMethod(Regenradar::class, 'BuildMeteoswissPayload');
+foreach ([[], ['cpc-test.h5' => ['href' => 'https://example.invalid/cpc.h5']],
+    ['rzc263190000rl.001.h5' => ['href' => ''], 'rzc263190005rl.001.h5' => ['href' => []]]] as $todayAssets) {
+    $fixture = new RainbowDiagnosticFixture();
+    $fixture->Create();
+    $fixture->responses = [meteoResponse($todayAssets), meteoResponse(meteoAsset($previousFrame))];
+    $payload = $meteoMethod->invoke($fixture);
+    check(count($payload['frames']) === 1 && $payload['frames'][0]['time'] === $previousFrame, 'Empty or unusable current day must fall back to yesterday');
+    check(count($fixture->requests) === 2, 'Fallback must request yesterday exactly once');
+    check(str_contains($fixture->requests[0]['url'], '/items/' . gmdate('Ymd', $midnight) . '-ch'), 'First STAC item must use today in UTC');
+    check(str_contains($fixture->requests[1]['url'], '/items/' . gmdate('Ymd', $previousFrame) . '-ch'), 'Second STAC item must use yesterday in UTC');
+}
+$assets = [];
+for ($i = 13; $i >= 0; $i--) $assets += meteoAsset($midnight + $i * 300);
+$fixture = new RainbowDiagnosticFixture();
+$fixture->Create();
+$fixture->responses = [meteoResponse($assets)];
+$payload = $meteoMethod->invoke($fixture);
+check(count($fixture->requests) === 1, 'Current RZC assets must avoid unnecessary fallback requests');
+check(count($payload['frames']) === 12 && $payload['frames'][0]['time'] === $midnight + 600 && $payload['frames'][11]['time'] === $midnight + 3900, 'Keep the latest 12 frames in chronological order');
+$fixture = new RainbowDiagnosticFixture();
+$fixture->Create();
+$fixture->responses = [meteoResponse([]), meteoResponse([]), meteoResponse([])];
+$payload = $meteoMethod->invoke($fixture);
+check(count($fixture->requests) === 3 && $payload['frames'] === [] && isset($payload['error']), 'No data must produce an error after bounded fallback');
+$fixture = new RainbowDiagnosticFixture();
+$fixture->Create();
+$fixture->responses = [
+    ['status' => 404, 'error' => 0, 'body' => ''], meteoResponse([]), meteoResponse(meteoAsset($midnight - 86400 - 300))
+];
+$payload = $meteoMethod->invoke($fixture);
+check(count($fixture->requests) === 3 && count($payload['frames']) === 1, 'Missing current item and empty yesterday must still allow the last supported fallback day');
+echo "PASS MeteoSwiss rollover, missing/unusable RZC assets, UTC day selection, sorting and bounded fallback\n";
