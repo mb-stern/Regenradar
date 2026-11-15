@@ -1940,14 +1940,14 @@ HTML;
             $rate = pow(pow(10, $dbz / 10) / $palette['zrA'], 1 / $palette['zrB']);
             $entries[] = [
                 'color' => $palette['colors'][$dbz - $palette['dbzMin']],
-                'label' => '≈ ' . number_format($rate, 1, ',', '') . ' mm/h (' . $dbz . ' dBZ)'
+                'label' => '≈ ' . number_format($rate, 1, ',', '')
             ];
         }
 
         return [
             'type' => 'entries',
             'provider' => $providerName,
-            'title' => 'Intensität · Universal Blue',
+            'title' => 'mm/h',
             'entries' => $entries
         ];
     }
